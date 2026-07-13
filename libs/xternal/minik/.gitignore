@@ -1,0 +1,8 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+env/
+
+# Project Specific
+cluster_state.json
