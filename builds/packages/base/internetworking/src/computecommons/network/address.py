@@ -15,11 +15,21 @@ class MACAddress:
     value: str
 
     def __post_init__(self) -> None:
-        compact = self.value.lower().replace(":", "").replace("-", "").replace(".", "")
+        compact = self._compact(self.value)
         if not _MAC_HEX.fullmatch(compact):
             raise ValueError(f"Invalid MAC address: {self.value!r}")
         normalized = ":".join(compact[index : index + 2] for index in range(0, 12, 2))
         object.__setattr__(self, "value", normalized)
+
+    @staticmethod
+    def _compact(value: str) -> str:
+        lowered = value.lower()
+        for separator in (":", "-"):
+            if separator in lowered:
+                parts = lowered.split(separator)
+                if len(parts) == 6 and all(1 <= len(part) <= 2 for part in parts):
+                    return "".join(part.zfill(2) for part in parts)
+        return lowered.replace(":", "").replace("-", "").replace(".", "")
 
     @property
     def is_multicast(self) -> bool:
@@ -41,6 +51,12 @@ class InterfaceAddress:
     scope: str | None = None
 
     def __post_init__(self) -> None:
+        if not isinstance(self.address, IPv4Address | IPv6Address):
+            raise TypeError("address must be an IPv4Address or IPv6Address")
+        if self.network is not None and not isinstance(self.network, IPv4Network | IPv6Network):
+            raise TypeError("network must be an IPv4Network or IPv6Network")
+        if self.broadcast is not None and not isinstance(self.broadcast, IPv4Address | IPv6Address):
+            raise TypeError("broadcast must be an IPv4Address or IPv6Address")
         if self.network is not None and self.address.version != self.network.version:
             raise ValueError("address and network IP versions must match")
         if self.broadcast is not None and self.address.version != self.broadcast.version:
