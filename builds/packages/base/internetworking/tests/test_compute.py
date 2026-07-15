@@ -19,6 +19,10 @@ def test_available_memory_cannot_exceed_total() -> None:
         MemoryInfo(total=ByteSize(10), available=ByteSize(11))
 
 
+def test_architecture_module_imports() -> None:
+    import computecommons.compute.architecture
+
+    assert computecommons.compute.architecture is not None
 def test_compute_import_paths_export_same_models() -> None:
     from computecommons.compute import CPUInfo as PackageCPUInfo
     from computecommons.compute import Machine as PackageMachine
