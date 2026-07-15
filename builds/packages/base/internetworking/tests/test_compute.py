@@ -23,3 +23,14 @@ def test_architecture_module_imports() -> None:
     import computecommons.compute.architecture
 
     assert computecommons.compute.architecture is not None
+def test_compute_import_paths_export_same_models() -> None:
+    from computecommons.compute import CPUInfo as PackageCPUInfo
+    from computecommons.compute import Machine as PackageMachine
+    from computecommons.compute import MemoryInfo as PackageMemoryInfo
+    from computecommons.compute.cpu import CPUInfo as ModuleCPUInfo
+    from computecommons.compute.machine import Machine as ModuleMachine
+    from computecommons.compute.memory import MemoryInfo as ModuleMemoryInfo
+
+    assert PackageCPUInfo is ModuleCPUInfo
+    assert PackageMemoryInfo is ModuleMemoryInfo
+    assert PackageMachine is ModuleMachine
