@@ -1,0 +1,10 @@
+[project.optional-dependencies]
+validation = ["pydantic>=2.12"]
+yaml = ["pyyaml>=6"]
+msgpack = ["msgpack>=1"]
+dev = [
+    "pytest>=8",
+    "pytest-cov>=6",
+    "mypy>=1.16",
+    "ruff>=0.12",
+]
