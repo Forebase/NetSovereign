@@ -3,6 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from types import MappingProxyType
 
+from .metadata import RegistryMetadata
+
 
 @dataclass(frozen=True, slots=True)
 class MediaType:
@@ -14,6 +16,14 @@ class MediaType:
     @property
     def value(self) -> str:
         return f"{self.type}/{self.subtype}"
+
+
+MEDIA_TYPES_METADATA = RegistryMetadata(
+    name="media-types",
+    source="Curated subset of the IANA Media Types registry",
+    source_url="https://www.iana.org/assignments/media-types/media-types.xhtml",
+    retrieved_at="2026-07-15",
+)
 
 
 MEDIA_TYPES: tuple[MediaType, ...] = (

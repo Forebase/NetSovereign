@@ -4,6 +4,16 @@ from types import MappingProxyType
 
 from computecommons.enums import CPUArchitecture
 
+from .metadata import RegistryMetadata
+
+ARCHITECTURE_ALIASES_METADATA = RegistryMetadata(
+    name="architecture-aliases",
+    source="Curated aliases for common CPU architectures",
+    version="0.1.0",
+    published_at="2026-07-15",
+)
+
+
 ARCHITECTURE_ALIASES = MappingProxyType(
     {
         "amd64": CPUArchitecture.X86_64,

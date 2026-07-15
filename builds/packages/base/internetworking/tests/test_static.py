@@ -4,9 +4,23 @@ import pytest
 
 from computecommons.enums import CPUArchitecture, OperatingSystemFamily
 from computecommons.static import (
+    ARCHITECTURE_ALIASES,
+    ARCHITECTURE_ALIASES_METADATA,
     FILESYSTEM_BY_NAME,
+    FILESYSTEMS,
+    FILESYSTEMS_METADATA,
+    IP_PROTOCOL_NUMBERS,
+    IP_PROTOCOL_NUMBERS_METADATA,
     MEDIA_TYPE_BY_VALUE,
+    MEDIA_TYPES,
+    MEDIA_TYPES_METADATA,
+    OPERATING_SYSTEMS,
+    OPERATING_SYSTEMS_METADATA,
     VENDOR_BY_SLUG,
+    VENDORS,
+    VENDORS_METADATA,
+    WELL_KNOWN_PORTS,
+    WELL_KNOWN_PORTS_METADATA,
     find_filesystem,
     find_media_type,
     find_media_type_by_extension,
@@ -20,6 +34,48 @@ from computecommons.static import (
     normalize_vendor,
     operating_system_family,
 )
+
+
+def test_static_registry_metadata_is_present() -> None:
+    metadata = (
+        ARCHITECTURE_ALIASES_METADATA,
+        FILESYSTEMS_METADATA,
+        IP_PROTOCOL_NUMBERS_METADATA,
+        MEDIA_TYPES_METADATA,
+        OPERATING_SYSTEMS_METADATA,
+        VENDORS_METADATA,
+        WELL_KNOWN_PORTS_METADATA,
+    )
+
+    assert {item.name for item in metadata} == {
+        "architecture-aliases",
+        "filesystems",
+        "ip-protocol-numbers",
+        "media-types",
+        "operating-systems",
+        "vendors",
+        "well-known-ports",
+    }
+    assert all(item.source for item in metadata)
+
+    with pytest.raises(FrozenInstanceError):
+        WELL_KNOWN_PORTS_METADATA.name = "other"  # type: ignore[misc]
+
+
+def test_static_registry_containers_are_immutable() -> None:
+    registries = (
+        ARCHITECTURE_ALIASES,
+        FILESYSTEMS,
+        IP_PROTOCOL_NUMBERS,
+        MEDIA_TYPES,
+        OPERATING_SYSTEMS,
+        VENDORS,
+        WELL_KNOWN_PORTS,
+    )
+
+    assert all(not hasattr(registry, "append") for registry in registries)
+    with pytest.raises(TypeError):
+        IP_PROTOCOL_NUMBERS[6] = "other"  # type: ignore[index]
 
 
 def test_architecture_aliases() -> None:

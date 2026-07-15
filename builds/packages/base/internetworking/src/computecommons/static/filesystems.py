@@ -3,6 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from types import MappingProxyType
 
+from .metadata import RegistryMetadata
+
 
 @dataclass(frozen=True, slots=True)
 class Filesystem:
@@ -10,6 +12,14 @@ class Filesystem:
     description: str
     case_sensitive: bool = True
     journaling: bool = False
+
+
+FILESYSTEMS_METADATA = RegistryMetadata(
+    name="filesystems",
+    source="Curated aliases for common filesystems",
+    version="0.1.0",
+    published_at="2026-07-15",
+)
 
 
 FILESYSTEMS: tuple[Filesystem, ...] = (
