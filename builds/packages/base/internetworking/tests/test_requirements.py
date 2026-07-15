@@ -24,7 +24,9 @@ def test_match_report_required_and_optional() -> None:
 
 
 def test_capability_imports_share_base_type() -> None:
-    capability = BaseCapability(QualifiedName("network", "ipv6"), properties={"stable": True})
+    capability: BaseCapability[object] = BaseCapability(
+        QualifiedName("network", "ipv6"), properties={"stable": True}
+    )
 
     assert RequirementsCapability is BaseCapability
     assert capability.name == QualifiedName("network", "ipv6")
@@ -33,7 +35,9 @@ def test_capability_imports_share_base_type() -> None:
 
 def test_requirement_match_uses_base_capability() -> None:
     requirement = CapabilityRequirement(QualifiedName("network", "ipv6"))
-    capability = RequirementsCapability(QualifiedName("network", "ipv6"), version="1")
+    capability: RequirementsCapability[object] = RequirementsCapability(
+        QualifiedName("network", "ipv6"), version="1"
+    )
     match = RequirementMatch(requirement, MatchStatus.SATISFIED, capability=capability)
 
     assert isinstance(match.capability, BaseCapability)

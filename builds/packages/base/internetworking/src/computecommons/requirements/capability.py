@@ -35,7 +35,7 @@ class MatchStatus(StrEnum):
 class RequirementMatch:
     requirement: CapabilityRequirement
     status: MatchStatus
-    capability: Capability | None = None
+    capability: Capability[Any] | None = None
     reason: str | None = None
 
 

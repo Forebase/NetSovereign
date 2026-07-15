@@ -3,7 +3,8 @@ from dataclasses import FrozenInstanceError
 
 import pytest
 
-from computecommons.base import Component, Resource
+from computecommons.base import Capability as BaseCapability
+from computecommons.base import Component, Entity, Provider, Resource
 from computecommons.deployment import Cluster
 from computecommons.identity import QualifiedName
 from computecommons.parsing import (
@@ -13,7 +14,6 @@ from computecommons.parsing import (
     parse_platform_tag,
     parse_version,
 )
-from computecommons.requirements import Capability
 from computecommons.serialization import to_primitive
 from computecommons.storage import (
     FileSystem,
@@ -28,26 +28,70 @@ from computecommons.units import ByteSize
 
 def test_resource_component_immutable_and_serializable() -> None:
     kind = QualifiedName.parse("compute:node")
-    resource = Resource(kind=kind, id="node-1", labels={"role": "worker"})
-    component = Component(
-        name=QualifiedName.parse("runtime:python"),
-        capabilities=(Capability(QualifiedName.parse("lang:python"), version="3.12"),),
-        metadata={"resource": resource},
+    entity = Entity(name="node-1", labels={"role": "worker"})
+    resource = Resource(entity=entity, kind=kind)
+    capability = BaseCapability[str](
+        QualifiedName.parse("lang:python"),
+        value="3.12",
+        properties={"runtime": "cpython"},
     )
+    component = Component(resource=resource, state="running", capabilities=(capability,))
 
     with pytest.raises(FrozenInstanceError):
-        resource.id = "other"  # type: ignore[misc]
+        resource.kind = QualifiedName.parse("compute:other")  # type: ignore[misc]
+    with pytest.raises(FrozenInstanceError):
+        component.state = "stopped"  # type: ignore[misc]
     with pytest.raises(TypeError):
-        resource.labels["role"] = "control"  # type: ignore[index]
+        capability.properties["runtime"] = "pypy"  # type: ignore[index]
 
     primitive = to_primitive(component)
-    assert primitive["name"] == {"namespace": "runtime", "name": "python"}
-    assert primitive["metadata"]["resource"]["id"] == "node-1"
+    assert primitive["resource"]["entity"]["name"] == "node-1"
+    assert primitive["capabilities"][0]["value"] == "3.12"
 
 
-def test_resource_validation() -> None:
-    with pytest.raises(ValueError):
-        Resource(kind=QualifiedName.parse("compute:node"), id="")
+def test_base_layer_typing_friendly_imports() -> None:
+    from computecommons.base import (
+        Detector,
+        Identifiable,
+        Named,
+        Parser,
+        Provider,
+        Report,
+        Resolver,
+        Result,
+        Serializable,
+    )
+    from computecommons.base.provider import Provider as ProviderAlias
+
+    assert ProviderAlias is Provider
+    assert all(
+        item is not None
+        for item in (
+            Detector,
+            Identifiable,
+            Named,
+            Parser,
+            Report,
+            Resolver,
+            Result,
+            Serializable,
+        )
+    )
+
+
+def test_provider_protocol_is_structural() -> None:
+    class StaticProvider:
+        name = "static"
+
+        def provide(self) -> str:
+            return "value"
+
+    assert isinstance(StaticProvider(), Provider)
+    assert Resource(
+        entity=Entity(name="provided"),
+        kind=QualifiedName.parse("compute:node"),
+        provider=StaticProvider(),
+    ).provider is not None
 
 
 def test_parsing_helpers_are_pure_value_parsers() -> None:
