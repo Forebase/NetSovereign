@@ -1,4 +1,12 @@
-"""Future module reserved for the computecommons v0.1 API surface."""
+"""Architecture helpers exposed from the compute package.
 
-# TODO(P2): Define stable value objects here as the related API area matures.
-# TODO(P3): Add package exports after names are accepted into the public API.
+The canonical architecture enum lives in :mod:`computecommons.enums.compute`, and
+normalization data lives in :mod:`computecommons.static.architectures`. This module
+provides the compute-package import path for that accepted public API without
+introducing duplicate value objects.
+"""
+
+from computecommons.enums import CPUArchitecture
+from computecommons.static import ARCHITECTURE_ALIASES, normalize_architecture
+
+__all__ = ["ARCHITECTURE_ALIASES", "CPUArchitecture", "normalize_architecture"]
