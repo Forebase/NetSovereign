@@ -73,6 +73,7 @@ The core package intentionally ships only compact, curated static registries wit
 - `computecommons-data-iana` for complete IANA protocol, port, and media-type registries
 - `computecommons-data-pci` for PCI vendor and device identifiers
 - `computecommons-data-usb` for USB vendor and product identifiers
+- `computecommons-data-oui` for IEEE OUI and MAC address assignment data
 
 ## Package boundaries
 

@@ -9,7 +9,9 @@ from .metadata import RegistryMetadata
 ARCHITECTURE_ALIASES_METADATA = RegistryMetadata(
     name="architecture-aliases",
     source="Curated aliases for common CPU architectures",
-    version="0.1.0",
+    source_url="package://computecommons/static/architectures.py",
+    package_curation_version="0.1.0",
+    compactness_notes="Hand-picked aliases for common runtime and packaging architecture names.",
     published_at="2026-07-15",
 )
 

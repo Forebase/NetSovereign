@@ -16,7 +16,12 @@ class Vendor:
 VENDORS_METADATA = RegistryMetadata(
     name="vendors",
     source="Curated aliases for common compute vendors",
-    version="0.1.0",
+    source_url="package://computecommons/static/vendors.py",
+    package_curation_version="0.1.0",
+    compactness_notes=(
+        "Small alias set for common compute vendors; PCI, USB, and OUI identifiers "
+        "are out of core."
+    ),
     published_at="2026-07-15",
 )
 

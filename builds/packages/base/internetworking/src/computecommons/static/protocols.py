@@ -8,6 +8,10 @@ IP_PROTOCOL_NUMBERS_METADATA = RegistryMetadata(
     name="ip-protocol-numbers",
     source="Curated subset of the IANA Protocol Numbers registry",
     source_url="https://www.iana.org/assignments/protocol-numbers/protocol-numbers.xhtml",
+    package_curation_version="0.1.0",
+    compactness_notes=(
+        "Subset limited to common IP protocol numbers used by lightweight networking models."
+    ),
     retrieved_at="2026-07-15",
 )
 
