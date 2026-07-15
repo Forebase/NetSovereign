@@ -1,3 +1,5 @@
+import importlib
+
 import pytest
 
 from computecommons.compute import CPUInfo, Machine, MemoryInfo, normalize_architecture
@@ -35,8 +37,19 @@ def test_architecture_api_reexports_canonical_helpers() -> None:
     assert ModuleCPUArchitecture is CPUArchitecture
     assert PackageCPUArchitecture is CPUArchitecture
     assert module_normalize_architecture is static_normalize_architecture
+    assert module_normalize_architecture("AMD64") is CPUArchitecture.X86_64
+    assert module_normalize_architecture(" aarch64 ") is CPUArchitecture.ARM64
+    assert module_normalize_architecture("mystery") is CPUArchitecture.UNKNOWN
     assert normalize_architecture("AMD64") is CPUArchitecture.X86_64
     assert ARCHITECTURE_ALIASES["amd64"] is CPUArchitecture.X86_64
+
+    with pytest.raises(TypeError):
+        ARCHITECTURE_ALIASES["amd64"] = CPUArchitecture.X86  # type: ignore[index]
+
+
+def test_misspelled_architechture_module_removed() -> None:
+    with pytest.raises(ModuleNotFoundError):
+        importlib.import_module("computecommons.compute.architechture")
 
 
 def test_compute_import_paths_export_same_models() -> None:
