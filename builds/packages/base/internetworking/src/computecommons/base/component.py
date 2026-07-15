@@ -5,8 +5,8 @@ from dataclasses import dataclass, field
 from types import MappingProxyType
 from typing import Any
 
+from computecommons.base.capability import Capability
 from computecommons.identity import QualifiedName
-from computecommons.requirements import Capability
 
 
 @dataclass(frozen=True, slots=True)
