@@ -3,6 +3,7 @@ from .component import Component
 from .entity import Entity, EntityId
 from .protocols import Detector, Identifiable, Named, Parser, Provider, Resolver, Serializable
 from .resource import Resource
+from .result import Report, Result
 from .snapshot import Snapshot
 
 __all__ = [
@@ -15,8 +16,10 @@ __all__ = [
     "Named",
     "Parser",
     "Provider",
+    "Report",
     "Resolver",
     "Resource",
+    "Result",
     "Serializable",
     "Snapshot",
 ]
