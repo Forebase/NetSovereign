@@ -3,12 +3,22 @@ from __future__ import annotations
 from dataclasses import dataclass
 from types import MappingProxyType
 
+from .metadata import RegistryMetadata
+
 
 @dataclass(frozen=True, slots=True)
 class Vendor:
     slug: str
     name: str
     homepage: str | None = None
+
+
+VENDORS_METADATA = RegistryMetadata(
+    name="vendors",
+    source="Curated aliases for common compute vendors",
+    version="0.1.0",
+    published_at="2026-07-15",
+)
 
 
 VENDORS: tuple[Vendor, ...] = (

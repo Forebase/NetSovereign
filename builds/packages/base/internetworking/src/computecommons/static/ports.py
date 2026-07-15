@@ -4,6 +4,8 @@ from dataclasses import dataclass
 
 from computecommons.enums import TransportProtocol
 
+from .metadata import RegistryMetadata
+
 
 @dataclass(frozen=True, slots=True)
 class ServicePort:
@@ -15,6 +17,14 @@ class ServicePort:
     def __post_init__(self) -> None:
         if not 0 <= self.port <= 65535:
             raise ValueError("port must be between 0 and 65535")
+
+
+WELL_KNOWN_PORTS_METADATA = RegistryMetadata(
+    name="well-known-ports",
+    source="Curated subset of the IANA Service Name and Transport Protocol Port Number Registry",
+    source_url="https://www.iana.org/assignments/service-names-port-numbers/service-names-port-numbers.xhtml",
+    retrieved_at="2026-07-15",
+)
 
 
 WELL_KNOWN_PORTS: tuple[ServicePort, ...] = (

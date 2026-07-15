@@ -5,12 +5,22 @@ from types import MappingProxyType
 
 from computecommons.enums import OperatingSystemFamily
 
+from .metadata import RegistryMetadata
+
 
 @dataclass(frozen=True, slots=True)
 class OperatingSystemRelease:
     name: str
     family: OperatingSystemFamily
     vendor: str | None = None
+
+
+OPERATING_SYSTEMS_METADATA = RegistryMetadata(
+    name="operating-systems",
+    source="Curated aliases for common operating-system releases and families",
+    version="0.1.0",
+    published_at="2026-07-15",
+)
 
 
 OPERATING_SYSTEMS: tuple[OperatingSystemRelease, ...] = (

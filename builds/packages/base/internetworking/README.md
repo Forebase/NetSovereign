@@ -63,8 +63,16 @@ interface = NetworkInterface(
 - Capabilities, requirements, constraints, and match reports
 - Byte-size, frequency, bandwidth, duration, and percentage value objects
 - Predictable recursive conversion to JSON-compatible values
-- Small architecture, protocol, and well-known-port registries
+- Small architecture, protocol, well-known-port, media-type, filesystem, OS, and vendor registries
 - Structural protocols for detectors, providers, parsers, and resolvers
+
+## Static registry data
+
+The core package intentionally ships only compact, curated static registries with immutable provenance metadata. Large externally maintained datasets should live in optional companion packages instead of expanding the core wheel. Examples include:
+
+- `computecommons-data-iana` for complete IANA protocol, port, and media-type registries
+- `computecommons-data-pci` for PCI vendor and device identifiers
+- `computecommons-data-usb` for USB vendor and product identifiers
 
 ## Package boundaries
 
