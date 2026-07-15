@@ -18,7 +18,12 @@ class OperatingSystemRelease:
 OPERATING_SYSTEMS_METADATA = RegistryMetadata(
     name="operating-systems",
     source="Curated aliases for common operating-system releases and families",
-    version="0.1.0",
+    source_url="package://computecommons/static/operating_systems.py",
+    package_curation_version="0.1.0",
+    compactness_notes=(
+        "Representative OS families and releases used for normalization, "
+        "not a distribution catalog."
+    ),
     published_at="2026-07-15",
 )
 

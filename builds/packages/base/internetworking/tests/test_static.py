@@ -57,6 +57,9 @@ def test_static_registry_metadata_is_present() -> None:
         "well-known-ports",
     }
     assert all(item.source for item in metadata)
+    assert all(item.source_url for item in metadata)
+    assert all(item.package_curation_version == "0.1.0" for item in metadata)
+    assert all(item.compactness_notes for item in metadata)
 
     with pytest.raises(FrozenInstanceError):
         WELL_KNOWN_PORTS_METADATA.name = "other"  # type: ignore[misc]

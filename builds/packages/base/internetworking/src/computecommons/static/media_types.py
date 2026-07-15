@@ -22,6 +22,10 @@ MEDIA_TYPES_METADATA = RegistryMetadata(
     name="media-types",
     source="Curated subset of the IANA Media Types registry",
     source_url="https://www.iana.org/assignments/media-types/media-types.xhtml",
+    package_curation_version="0.1.0",
+    compactness_notes=(
+        "Subset limited to frequently encountered application, text, and image media types."
+    ),
     retrieved_at="2026-07-15",
 )
 

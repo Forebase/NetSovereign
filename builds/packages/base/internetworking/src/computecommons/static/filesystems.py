@@ -17,7 +17,9 @@ class Filesystem:
 FILESYSTEMS_METADATA = RegistryMetadata(
     name="filesystems",
     source="Curated aliases for common filesystems",
-    version="0.1.0",
+    source_url="package://computecommons/static/filesystems.py",
+    package_curation_version="0.1.0",
+    compactness_notes="Compact list of common local, server, and image filesystems only.",
     published_at="2026-07-15",
 )
 

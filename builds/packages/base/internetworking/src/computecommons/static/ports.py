@@ -23,6 +23,8 @@ WELL_KNOWN_PORTS_METADATA = RegistryMetadata(
     name="well-known-ports",
     source="Curated subset of the IANA Service Name and Transport Protocol Port Number Registry",
     source_url="https://www.iana.org/assignments/service-names-port-numbers/service-names-port-numbers.xhtml",
+    package_curation_version="0.1.0",
+    compactness_notes="Subset limited to foundational well-known ports needed by core helpers.",
     retrieved_at="2026-07-15",
 )
 
