@@ -1,6 +1,14 @@
-from .kernel import Kernel
+from .kernel import Kernel, KernelInfo
 from .models import Host, OperatingSystem, RuntimeEnvironment
 from .service import Service
 from .user import User
 
-__all__ = ["Host", "Kernel", "OperatingSystem", "RuntimeEnvironment", "Service", "User"]
+__all__ = [
+    "Host",
+    "Kernel",
+    "KernelInfo",
+    "OperatingSystem",
+    "RuntimeEnvironment",
+    "Service",
+    "User",
+]

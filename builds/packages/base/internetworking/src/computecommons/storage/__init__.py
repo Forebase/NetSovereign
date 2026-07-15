@@ -1,7 +1,16 @@
 from .capacity import StorageCapacity
 from .device import StorageDevice
-from .filesystem import FileSystem
-from .mount import MountPoint
-from .volume import StorageVolume
+from .filesystem import FileSystem, FilesystemInfo
+from .mount import Mount, MountPoint
+from .volume import StorageVolume, Volume
 
-__all__ = ["FileSystem", "MountPoint", "StorageCapacity", "StorageDevice", "StorageVolume"]
+__all__ = [
+    "FileSystem",
+    "FilesystemInfo",
+    "Mount",
+    "MountPoint",
+    "StorageCapacity",
+    "StorageDevice",
+    "StorageVolume",
+    "Volume",
+]
