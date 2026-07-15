@@ -66,6 +66,12 @@ interface = NetworkInterface(
 - Small architecture, protocol, well-known-port, media-type, filesystem, OS, and vendor registries
 - Structural protocols for detectors, providers, parsers, and resolvers
 
+## Serialization stability
+
+`computecommons.serialization.to_primitive` is the canonical dependency-free conversion layer for public value objects. It recursively converts dataclasses, enums, UUIDs, timezone-aware datetimes and dates, mappings, tuples, lists, sets, frozensets, and `ipaddress` address/network objects into JSON-compatible primitives; `dumps` then delegates to the Python standard library `json` module.
+
+Serialization is intended to be stable for exported public value objects within a release line: dataclass field names become object keys, enum values are emitted as their canonical string values, UUID and IP values are emitted with their standard string form, and date/time values use ISO 8601 text. The helpers do not persist data, connect to databases, read application configuration, or add third-party dependencies. New fields may be added before `1.0.0`, so consumers that store serialized output should tolerate additional keys while relying only on documented public exports.
+
 ## Static registry data
 
 The core package intentionally ships only compact, curated static registries with immutable provenance metadata. Large externally maintained datasets should live in optional companion packages instead of expanding the core wheel. Examples include:
