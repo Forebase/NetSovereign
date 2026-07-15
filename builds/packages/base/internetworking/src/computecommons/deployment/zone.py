@@ -1,4 +1,17 @@
-"""Future module reserved for the computecommons v0.1 API surface."""
+from __future__ import annotations
 
-# TODO(P2): Define stable value objects here as the related API area matures.
-# TODO(P3): Add package exports after names are accepted into the public API.
+from collections.abc import Mapping
+from dataclasses import dataclass, field
+from types import MappingProxyType
+
+
+@dataclass(frozen=True, slots=True)
+class Zone:
+    id: str
+    name: str | None = None
+    labels: Mapping[str, str] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        if not self.id:
+            raise ValueError("Zone id cannot be empty")
+        object.__setattr__(self, "labels", MappingProxyType(dict(self.labels)))

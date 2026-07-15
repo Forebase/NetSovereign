@@ -1,4 +1,18 @@
-"""Future module reserved for the computecommons v0.1 API surface."""
+from __future__ import annotations
 
-# TODO(P2): Define stable value objects here as the related API area matures.
-# TODO(P3): Add package exports after names are accepted into the public API.
+from dataclasses import dataclass
+
+from computecommons.storage.capacity import StorageCapacity
+from computecommons.storage.filesystem import FileSystem
+
+
+@dataclass(frozen=True, slots=True)
+class StorageVolume:
+    id: str
+    name: str | None = None
+    capacity: StorageCapacity | None = None
+    filesystem: FileSystem | None = None
+
+    def __post_init__(self) -> None:
+        if not self.id:
+            raise ValueError("Storage volume id cannot be empty")

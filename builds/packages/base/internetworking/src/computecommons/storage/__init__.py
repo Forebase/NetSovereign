@@ -1,4 +1,7 @@
-"""Future module reserved for the computecommons v0.1 API surface."""
+from .capacity import StorageCapacity
+from .device import StorageDevice
+from .filesystem import FileSystem
+from .mount import MountPoint
+from .volume import StorageVolume
 
-# TODO(P2): Define stable value objects here as the related API area matures.
-# TODO(P3): Add package exports after names are accepted into the public API.
+__all__ = ["FileSystem", "MountPoint", "StorageCapacity", "StorageDevice", "StorageVolume"]

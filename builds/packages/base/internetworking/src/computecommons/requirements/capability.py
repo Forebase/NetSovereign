@@ -1,21 +1,13 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from enum import StrEnum
 from types import MappingProxyType
-from typing import Any, Mapping
+from typing import Any
 
+from computecommons.base import Capability
 from computecommons.identity import QualifiedName
-
-
-@dataclass(frozen=True, slots=True)
-class Capability:
-    name: QualifiedName
-    version: str | None = None
-    properties: Mapping[str, Any] = field(default_factory=dict)
-
-    def __post_init__(self) -> None:
-        object.__setattr__(self, "properties", MappingProxyType(dict(self.properties)))
 
 
 @dataclass(frozen=True, slots=True)
@@ -60,3 +52,12 @@ class MatchReport:
             match.status is MatchStatus.SATISFIED or match.requirement.optional
             for match in self.matches
         )
+
+
+__all__ = [
+    "Capability",
+    "CapabilityRequirement",
+    "MatchReport",
+    "MatchStatus",
+    "RequirementMatch",
+]
