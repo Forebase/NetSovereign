@@ -17,3 +17,9 @@ def test_machine_model() -> None:
 def test_available_memory_cannot_exceed_total() -> None:
     with pytest.raises(ValueError):
         MemoryInfo(total=ByteSize(10), available=ByteSize(11))
+
+
+def test_architecture_module_imports() -> None:
+    import computecommons.compute.architecture
+
+    assert computecommons.compute.architecture is not None
