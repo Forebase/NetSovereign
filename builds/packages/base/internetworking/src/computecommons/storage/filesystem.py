@@ -1,4 +1,14 @@
-"""Future module reserved for the computecommons v0.1 API surface."""
+from __future__ import annotations
 
-# TODO(P2): Define stable value objects here as the related API area matures.
-# TODO(P3): Add package exports after names are accepted into the public API.
+from dataclasses import dataclass
+
+
+@dataclass(frozen=True, slots=True)
+class FileSystem:
+    type: str
+    label: str | None = None
+    uuid: str | None = None
+
+    def __post_init__(self) -> None:
+        if not self.type:
+            raise ValueError("Filesystem type cannot be empty")
