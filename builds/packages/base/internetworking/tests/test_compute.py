@@ -59,7 +59,13 @@ def test_compute_import_paths_export_same_models() -> None:
     from computecommons.compute.cpu import CPUInfo as ModuleCPUInfo
     from computecommons.compute.machine import Machine as ModuleMachine
     from computecommons.compute.memory import MemoryInfo as ModuleMemoryInfo
+    from computecommons.compute.models import CPUInfo as ModelsCPUInfo
+    from computecommons.compute.models import Machine as ModelsMachine
+    from computecommons.compute.models import MemoryInfo as ModelsMemoryInfo
 
     assert PackageCPUInfo is ModuleCPUInfo
     assert PackageMemoryInfo is ModuleMemoryInfo
     assert PackageMachine is ModuleMachine
+    assert ModelsCPUInfo is ModuleCPUInfo
+    assert ModelsMemoryInfo is ModuleMemoryInfo
+    assert ModelsMachine is ModuleMachine
