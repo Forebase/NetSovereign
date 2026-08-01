@@ -1,0 +1,1033 @@
+{
+  "$defs": {
+    "Allocation": {
+      "additionalProperties": false,
+      "properties": {
+        "authority_id": {
+          "title": "Authority Id",
+          "type": "string"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "recipient": {
+          "title": "Recipient",
+          "type": "string"
+        },
+        "resource_id": {
+          "title": "Resource Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "resource_id",
+        "authority_id",
+        "recipient"
+      ],
+      "title": "Allocation",
+      "type": "object"
+    },
+    "Authority": {
+      "additionalProperties": false,
+      "properties": {
+        "controls": {
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Controls",
+          "type": "array"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Description"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "kind": {
+          "$ref": "#/$defs/AuthorityKind"
+        },
+        "lifecycle": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LifecycleMetadata"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "operator": {
+          "title": "Operator",
+          "type": "string"
+        },
+        "scope": {
+          "$ref": "#/$defs/AuthorityScope"
+        },
+        "source": {
+          "$ref": "#/$defs/AuthoritySource",
+          "default": "local"
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "operator",
+        "scope",
+        "controls"
+      ],
+      "title": "Authority",
+      "type": "object"
+    },
+    "AuthorityKind": {
+      "enum": [
+        "world_root",
+        "root_naming",
+        "numbering",
+        "organisation_registry",
+        "naming_registry",
+        "registrar",
+        "trust",
+        "platform_identity",
+        "inworld_identity",
+        "transit",
+        "mail",
+        "service_catalogue"
+      ],
+      "title": "AuthorityKind",
+      "type": "string"
+    },
+    "AuthorityScope": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "$ref": "#/$defs/ScopeKind"
+        },
+        "reference": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reference"
+        }
+      },
+      "required": [
+        "kind"
+      ],
+      "title": "AuthorityScope",
+      "type": "object"
+    },
+    "AuthoritySource": {
+      "enum": [
+        "local",
+        "delegated_local",
+        "mirrored",
+        "imported_peer",
+        "external"
+      ],
+      "title": "AuthoritySource",
+      "type": "string"
+    },
+    "AutonomyDeclaration": {
+      "additionalProperties": false,
+      "properties": {
+        "claims": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Claims",
+          "type": "array"
+        },
+        "target": {
+          "enum": [
+            "authority_autonomous",
+            "partially_autonomous",
+            "externally_dependent"
+          ],
+          "title": "Target",
+          "type": "string"
+        }
+      },
+      "required": [
+        "target"
+      ],
+      "title": "AutonomyDeclaration",
+      "type": "object"
+    },
+    "BoundaryPolicy": {
+      "additionalProperties": false,
+      "properties": {
+        "admit_upstreams_with_mirrors": {
+          "default": false,
+          "title": "Admit Upstreams With Mirrors",
+          "type": "boolean"
+        },
+        "approved_upstream_resolvers": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Approved Upstream Resolvers",
+          "type": "array"
+        },
+        "authority_exports": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Authority Exports",
+          "type": "array"
+        },
+        "authority_imports": {
+          "items": {
+            "$ref": "#/$defs/TrustBundle"
+          },
+          "title": "Authority Imports",
+          "type": "array"
+        },
+        "cross_world": {
+          "$ref": "#/$defs/CrossWorldPosture",
+          "default": "none"
+        },
+        "egress": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Egress",
+          "type": "array"
+        },
+        "ingress": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Ingress",
+          "type": "array"
+        },
+        "mirrors": {
+          "items": {
+            "$ref": "#/$defs/Mirror"
+          },
+          "title": "Mirrors",
+          "type": "array"
+        },
+        "peers": {
+          "items": {
+            "$ref": "#/$defs/Peer"
+          },
+          "title": "Peers",
+          "type": "array"
+        },
+        "real_internet": {
+          "$ref": "#/$defs/InternetPosture",
+          "default": "isolated"
+        }
+      },
+      "title": "BoundaryPolicy",
+      "type": "object"
+    },
+    "CapabilityRequirement": {
+      "additionalProperties": false,
+      "properties": {
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Description"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "status": {
+          "default": "required",
+          "enum": [
+            "required",
+            "deferred"
+          ],
+          "title": "Status",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "title": "CapabilityRequirement",
+      "type": "object"
+    },
+    "CrossWorldPosture": {
+      "enum": [
+        "none",
+        "peered",
+        "federated"
+      ],
+      "title": "CrossWorldPosture",
+      "type": "string"
+    },
+    "Delegation": {
+      "additionalProperties": false,
+      "properties": {
+        "from_authority_id": {
+          "title": "From Authority Id",
+          "type": "string"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "resource_classes": {
+          "items": {
+            "$ref": "#/$defs/ResourceClass"
+          },
+          "title": "Resource Classes",
+          "type": "array"
+        },
+        "to_authority_id": {
+          "title": "To Authority Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "from_authority_id",
+        "to_authority_id",
+        "resource_classes"
+      ],
+      "title": "Delegation",
+      "type": "object"
+    },
+    "ExternalDependency": {
+      "additionalProperties": false,
+      "properties": {
+        "description": {
+          "title": "Description",
+          "type": "string"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "required": {
+          "default": true,
+          "title": "Required",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "id",
+        "description"
+      ],
+      "title": "ExternalDependency",
+      "type": "object"
+    },
+    "GovernedResource": {
+      "additionalProperties": false,
+      "properties": {
+        "authority": {
+          "title": "Authority",
+          "type": "string"
+        },
+        "class": {
+          "$ref": "#/$defs/ResourceClass"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "registrar": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Registrar"
+        },
+        "registry": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Registry"
+        }
+      },
+      "required": [
+        "id",
+        "class",
+        "authority"
+      ],
+      "title": "GovernedResource",
+      "type": "object"
+    },
+    "Grant": {
+      "additionalProperties": false,
+      "properties": {
+        "actions": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Actions",
+          "type": "array"
+        },
+        "authority_id": {
+          "title": "Authority Id",
+          "type": "string"
+        },
+        "grantee": {
+          "title": "Grantee",
+          "type": "string"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "authority_id",
+        "grantee",
+        "actions"
+      ],
+      "title": "Grant",
+      "type": "object"
+    },
+    "Institution": {
+      "additionalProperties": false,
+      "properties": {
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Description"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "status": {
+          "default": "active",
+          "title": "Status",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "name"
+      ],
+      "title": "Institution",
+      "type": "object"
+    },
+    "InternetPosture": {
+      "enum": [
+        "isolated",
+        "shadowed",
+        "mirrored",
+        "exposed",
+        "custom"
+      ],
+      "title": "InternetPosture",
+      "type": "string"
+    },
+    "LifecycleMetadata": {
+      "additionalProperties": false,
+      "properties": {
+        "revision": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Revision"
+        },
+        "since": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Since"
+        },
+        "status": {
+          "default": "active",
+          "title": "Status",
+          "type": "string"
+        }
+      },
+      "title": "LifecycleMetadata",
+      "type": "object"
+    },
+    "Mandate": {
+      "additionalProperties": false,
+      "properties": {
+        "actions": {
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Actions",
+          "type": "array"
+        },
+        "authority": {
+          "title": "Authority",
+          "type": "string"
+        },
+        "constraints": {
+          "additionalProperties": true,
+          "title": "Constraints",
+          "type": "object"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "jurisdiction": {
+          "title": "Jurisdiction",
+          "type": "string"
+        },
+        "resources": {
+          "items": {
+            "$ref": "#/$defs/ResourceClass"
+          },
+          "minItems": 1,
+          "title": "Resources",
+          "type": "array"
+        },
+        "status": {
+          "default": "active",
+          "title": "Status",
+          "type": "string"
+        },
+        "validity": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Validity"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "id",
+        "authority",
+        "actions",
+        "resources",
+        "jurisdiction"
+      ],
+      "title": "Mandate",
+      "type": "object"
+    },
+    "Mirror": {
+      "additionalProperties": false,
+      "properties": {
+        "source": {
+          "title": "Source",
+          "type": "string"
+        },
+        "suffix": {
+          "title": "Suffix",
+          "type": "string"
+        }
+      },
+      "required": [
+        "suffix",
+        "source"
+      ],
+      "title": "Mirror",
+      "type": "object"
+    },
+    "Peer": {
+      "additionalProperties": false,
+      "properties": {
+        "active": {
+          "default": true,
+          "title": "Active",
+          "type": "boolean"
+        },
+        "display_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Display Name"
+        },
+        "dns_suffixes": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Dns Suffixes",
+          "type": "array"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "title": "Peer",
+      "type": "object"
+    },
+    "ProviderBinding": {
+      "additionalProperties": false,
+      "properties": {
+        "capability": {
+          "title": "Capability",
+          "type": "string"
+        },
+        "configuration": {
+          "additionalProperties": true,
+          "title": "Configuration",
+          "type": "object"
+        },
+        "provider": {
+          "title": "Provider",
+          "type": "string"
+        },
+        "replaceable": {
+          "const": true,
+          "default": true,
+          "title": "Replaceable",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "capability",
+        "provider"
+      ],
+      "title": "ProviderBinding",
+      "type": "object"
+    },
+    "Registration": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "registrar_authority_id": {
+          "title": "Registrar Authority Id",
+          "type": "string"
+        },
+        "registry_authority_id": {
+          "title": "Registry Authority Id",
+          "type": "string"
+        },
+        "resource_id": {
+          "title": "Resource Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "resource_id",
+        "registry_authority_id",
+        "registrar_authority_id"
+      ],
+      "title": "Registration",
+      "type": "object"
+    },
+    "ResourceClass": {
+      "enum": [
+        "world",
+        "name",
+        "number",
+        "organisation",
+        "domain",
+        "registration",
+        "certificate",
+        "platform_identity",
+        "inworld_identity",
+        "route",
+        "mail_domain",
+        "service"
+      ],
+      "title": "ResourceClass",
+      "type": "string"
+    },
+    "ScopeKind": {
+      "enum": [
+        "world",
+        "platform",
+        "inworld",
+        "org",
+        "boundary",
+        "peer",
+        "external"
+      ],
+      "title": "ScopeKind",
+      "type": "string"
+    },
+    "TrustBundle": {
+      "additionalProperties": false,
+      "properties": {
+        "accepted_audiences": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Accepted Audiences",
+          "type": "array"
+        },
+        "display_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Display Name"
+        },
+        "dkim_policy": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Dkim Policy"
+        },
+        "dns_suffixes": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Dns Suffixes",
+          "type": "array"
+        },
+        "expires_at": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Expires At"
+        },
+        "mail_domains": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Mail Domains",
+          "type": "array"
+        },
+        "mode": {
+          "$ref": "#/$defs/CrossWorldPosture"
+        },
+        "oidc_issuer": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Oidc Issuer"
+        },
+        "peer_id": {
+          "title": "Peer Id",
+          "type": "string"
+        },
+        "provenance": {
+          "title": "Provenance",
+          "type": "string"
+        },
+        "revision": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Revision"
+        },
+        "root_ca": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Root Ca"
+        },
+        "trust_anchor": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Trust Anchor"
+        }
+      },
+      "required": [
+        "peer_id",
+        "mode",
+        "provenance"
+      ],
+      "title": "TrustBundle",
+      "type": "object"
+    },
+    "Validity": {
+      "additionalProperties": false,
+      "properties": {
+        "not_after": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Not After"
+        },
+        "not_before": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Not Before"
+        }
+      },
+      "title": "Validity",
+      "type": "object"
+    },
+    "WorldIdentity": {
+      "additionalProperties": false,
+      "properties": {
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Description"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "lifecycle": {
+          "default": "proposed",
+          "enum": [
+            "proposed",
+            "active",
+            "suspended",
+            "retired"
+          ],
+          "title": "Lifecycle",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "revision": {
+          "title": "Revision",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "revision"
+      ],
+      "title": "WorldIdentity",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "allocations": {
+      "items": {
+        "$ref": "#/$defs/Allocation"
+      },
+      "title": "Allocations",
+      "type": "array"
+    },
+    "apiVersion": {
+      "const": "netsovereign.io/v0alpha2",
+      "title": "Apiversion",
+      "type": "string"
+    },
+    "authorities": {
+      "items": {
+        "$ref": "#/$defs/Authority"
+      },
+      "title": "Authorities",
+      "type": "array"
+    },
+    "autonomy": {
+      "$ref": "#/$defs/AutonomyDeclaration"
+    },
+    "boundary": {
+      "$ref": "#/$defs/BoundaryPolicy"
+    },
+    "capabilities": {
+      "items": {
+        "$ref": "#/$defs/CapabilityRequirement"
+      },
+      "title": "Capabilities",
+      "type": "array"
+    },
+    "delegations": {
+      "items": {
+        "$ref": "#/$defs/Delegation"
+      },
+      "title": "Delegations",
+      "type": "array"
+    },
+    "externalDependencies": {
+      "items": {
+        "$ref": "#/$defs/ExternalDependency"
+      },
+      "title": "Externaldependencies",
+      "type": "array"
+    },
+    "grants": {
+      "items": {
+        "$ref": "#/$defs/Grant"
+      },
+      "title": "Grants",
+      "type": "array"
+    },
+    "institutions": {
+      "items": {
+        "$ref": "#/$defs/Institution"
+      },
+      "title": "Institutions",
+      "type": "array"
+    },
+    "kind": {
+      "const": "World",
+      "default": "World",
+      "title": "Kind",
+      "type": "string"
+    },
+    "mandates": {
+      "items": {
+        "$ref": "#/$defs/Mandate"
+      },
+      "title": "Mandates",
+      "type": "array"
+    },
+    "providerBindings": {
+      "items": {
+        "$ref": "#/$defs/ProviderBinding"
+      },
+      "title": "Providerbindings",
+      "type": "array"
+    },
+    "registrations": {
+      "items": {
+        "$ref": "#/$defs/Registration"
+      },
+      "title": "Registrations",
+      "type": "array"
+    },
+    "resources": {
+      "items": {
+        "$ref": "#/$defs/GovernedResource"
+      },
+      "title": "Resources",
+      "type": "array"
+    },
+    "world": {
+      "$ref": "#/$defs/WorldIdentity"
+    }
+  },
+  "required": [
+    "apiVersion",
+    "world",
+    "autonomy"
+  ],
+  "title": "WorldSpec",
+  "type": "object"
+}

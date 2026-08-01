@@ -1,0 +1,46 @@
+apiVersion: netsovereign.io/v0alpha2
+kind: World
+world:
+  id: minimal
+  name: Minimal Sovereign World
+  revision: "1"
+  lifecycle: active
+autonomy:
+  target: authority_autonomous
+  claims: [local naming and identity]
+institutions:
+  - {id: world-administration, name: World Administration}
+authorities:
+  - {id: world-root, kind: world_root, operator: world-administration, scope: {kind: world}, controls: [declare, delegate]}
+  - {id: root-naming, kind: root_naming, operator: world-administration, scope: {kind: world}, controls: [declare, delegate]}
+  - {id: numbering, kind: numbering, operator: world-administration, scope: {kind: world}, controls: [allocate, revoke]}
+  - {id: organisation-registry, kind: organisation_registry, operator: world-administration, scope: {kind: world}, controls: [admit, revoke]}
+  - {id: naming-registry, kind: naming_registry, operator: world-administration, scope: {kind: world}, controls: [admit, delegate]}
+  - {id: default-registrar, kind: registrar, operator: world-administration, scope: {kind: world}, controls: [declare, submit]}
+  - {id: trust, kind: trust, operator: world-administration, scope: {kind: world}, controls: [certify, revoke]}
+  - {id: platform-identity, kind: platform_identity, operator: world-administration, scope: {kind: platform}, controls: [admit, revoke]}
+  - {id: inworld-identity, kind: inworld_identity, operator: world-administration, scope: {kind: inworld}, controls: [admit, revoke]}
+  - {id: transit, kind: transit, operator: world-administration, scope: {kind: boundary}, controls: [route, expose]}
+  - {id: mail, kind: mail, operator: world-administration, scope: {kind: world}, controls: [declare], lifecycle: {status: deferred}}
+  - {id: service-catalogue, kind: service_catalogue, operator: world-administration, scope: {kind: world}, controls: [declare], lifecycle: {status: deferred}}
+mandates:
+  - {id: root-mandate, authority: world-root, actions: [declare], resources: [world], jurisdiction: minimal}
+  - {id: naming-mandate, authority: root-naming, actions: [declare], resources: [name], jurisdiction: minimal}
+  - {id: numbering-mandate, authority: numbering, actions: [allocate], resources: [number], jurisdiction: minimal}
+  - {id: org-registry-mandate, authority: organisation-registry, actions: [admit], resources: [organisation], jurisdiction: minimal}
+  - {id: naming-registry-mandate, authority: naming-registry, actions: [admit], resources: [domain], jurisdiction: minimal}
+  - {id: registrar-mandate, authority: default-registrar, actions: [declare], resources: [registration], jurisdiction: minimal}
+  - {id: trust-mandate, authority: trust, actions: [certify], resources: [certificate], jurisdiction: minimal}
+  - {id: platform-identity-mandate, authority: platform-identity, actions: [admit], resources: [platform_identity], jurisdiction: minimal}
+  - {id: inworld-identity-mandate, authority: inworld-identity, actions: [admit], resources: [inworld_identity], jurisdiction: minimal}
+  - {id: transit-mandate, authority: transit, actions: [route], resources: [route], jurisdiction: minimal}
+resources:
+  - {id: root-zone, class: name, authority: root-naming, registry: naming-registry, registrar: default-registrar}
+capabilities:
+  - {id: authoritative-naming, status: required}
+  - {id: mail, status: deferred}
+  - {id: service-catalogue, status: deferred}
+providerBindings:
+  - {capability: authoritative-naming, provider: replaceable-example, configuration: {profile: local}, replaceable: true}
+boundary: {real_internet: isolated, cross_world: none}
+externalDependencies: []

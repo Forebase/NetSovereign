@@ -1,0 +1,2 @@
+# v0alpha2 schema
+`apiVersion: netsovereign.io/v0alpha2` documents a `World` with identity/lifecycle, autonomy targets, institutions, authorities, mandates, governed resources and foundational registrations/allocations/grants/delegations, capabilities, boundary policy, provider bindings, and explicit dependencies. Domain objects reject unknown fields. Only `providerBindings[].configuration` is an intentionally open provider mapping. Regenerate `schemas/world-v0alpha2.schema.json` with `uv run python scripts/generate_schema.py`.

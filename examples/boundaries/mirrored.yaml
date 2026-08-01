@@ -1,0 +1,3 @@
+real_internet: mirrored
+cross_world: none
+mirrors: [{suffix: example., source: signed-snapshot}]
