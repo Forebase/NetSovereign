@@ -85,6 +85,21 @@ def test_empty_imports_and_bad_federation():
         TrustBundle(peer_id="p", mode="federated", provenance="x")
     with pytest.raises(ValidationError):
         BoundaryPolicy(real_internet="isolated", approved_upstream_resolvers=["ambient"])
+    with pytest.raises(ValidationError):
+        BoundaryPolicy.model_validate(
+            {
+                "cross_world": "peered",
+                "peers": [{"id": "p"}],
+                "authority_imports": [
+                    {
+                        "peer_id": "p",
+                        "mode": "federated",
+                        "oidc_issuer": "https://issuer.invalid",
+                        "provenance": "test",
+                    }
+                ],
+            }
+        )
 
 
 def test_semantic_failures_and_duplicates():
@@ -101,6 +116,103 @@ def test_semantic_failures_and_duplicates():
 def test_schema_stable():
     expected = json.loads((ROOT / "schemas/world-v0alpha2.schema.json").read_text())
     assert expected == WorldSpec.model_json_schema(by_alias=True)
+
+
+def test_foundational_relationships_are_validated_and_preserved():
+    data = yaml.safe_load((ROOT / "examples/minimal/world.yaml").read_text())
+    data["registrations"] = [
+        {
+            "id": "reg",
+            "resource_id": "root-zone",
+            "registry_authority_id": "naming-registry",
+            "registrar_authority_id": "default-registrar",
+        }
+    ]
+    data["allocations"] = [
+        {
+            "id": "allocation",
+            "resource_id": "root-zone",
+            "authority_id": "root-naming",
+            "recipient": "world-administration",
+        }
+    ]
+    data["grants"] = [
+        {
+            "id": "grant",
+            "authority_id": "root-naming",
+            "grantee": "world-administration",
+            "actions": ["declare"],
+        }
+    ]
+    data["delegations"] = [
+        {
+            "id": "delegation",
+            "from_authority_id": "root-naming",
+            "to_authority_id": "naming-registry",
+            "resource_classes": ["name"],
+        }
+    ]
+    spec = WorldSpec.model_validate(data)
+    assert not has_errors(validate_spec(spec))
+    manifest = build_manifest(spec)
+    assert [item.id for item in manifest.registrations] == ["reg"]
+    assert [item.id for item in manifest.allocations] == ["allocation"]
+    assert [item.id for item in manifest.grants] == ["grant"]
+    assert [item.id for item in manifest.delegations] == ["delegation"]
+    node_ids = {node.id for node in manifest.authority_graph.nodes}
+    assert all(
+        edge.source in node_ids and edge.target in node_ids
+        for edge in manifest.authority_graph.edges
+    )
+
+
+@pytest.mark.parametrize(
+    ("collection", "value", "code"),
+    [
+        (
+            "registrations",
+            {
+                "id": "x",
+                "resource_id": "missing",
+                "registry_authority_id": "naming-registry",
+                "registrar_authority_id": "default-registrar",
+            },
+            "missing_registration_resource",
+        ),
+        (
+            "allocations",
+            {"id": "x", "resource_id": "root-zone", "authority_id": "missing", "recipient": "x"},
+            "missing_allocation_authority",
+        ),
+        (
+            "grants",
+            {"id": "x", "authority_id": "missing", "grantee": "x", "actions": ["declare"]},
+            "missing_grant_authority",
+        ),
+        (
+            "delegations",
+            {
+                "id": "x",
+                "from_authority_id": "missing",
+                "to_authority_id": "root-naming",
+                "resource_classes": ["name"],
+            },
+            "missing_delegation_source",
+        ),
+    ],
+)
+def test_broken_foundational_references(collection, value, code):
+    data = yaml.safe_load((ROOT / "examples/minimal/world.yaml").read_text())
+    data[collection] = [value]
+    assert code in {item.code for item in validate_spec(WorldSpec.model_validate(data))}
+
+
+def test_mandate_action_must_be_controlled():
+    data = yaml.safe_load((ROOT / "examples/minimal/world.yaml").read_text())
+    data["mandates"][0]["actions"] = ["revoke"]
+    assert "mandate_action_not_controlled" in {
+        item.code for item in validate_spec(WorldSpec.model_validate(data))
+    }
 
 
 def test_cli_success_failure_and_output():

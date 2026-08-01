@@ -109,6 +109,16 @@ def validate_spec(spec: WorldSpec) -> list[Diagnostic]:
             )
             continue
         mandated.add(mandate_authority.id)
+        unsupported_actions = sorted(set(mandate.actions) - set(mandate_authority.controls))
+        if unsupported_actions:
+            diagnostics.append(
+                Diagnostic(
+                    code="mandate_action_not_controlled",
+                    severity=Severity.ERROR,
+                    location=f"mandates[{i}].actions",
+                    message=f"authority does not control actions: {', '.join(unsupported_actions)}",
+                )
+            )
         for mandate_resource in mandate.resource_classes:
             if mandate_authority.kind not in _COMPATIBLE[mandate_resource]:
                 diagnostics.append(
@@ -119,6 +129,122 @@ def validate_spec(spec: WorldSpec) -> list[Diagnostic]:
                         message=f"{mandate_authority.kind} cannot govern {mandate_resource}",
                     )
                 )
+    resources = {item.id: item for item in spec.resources}
+    for i, registration in enumerate(spec.registrations):
+        if registration.resource_id not in resources:
+            diagnostics.append(
+                Diagnostic(
+                    code="missing_registration_resource",
+                    severity=Severity.ERROR,
+                    location=f"registrations[{i}].resource_id",
+                    message="registration references a missing resource",
+                )
+            )
+        registry = authorities.get(registration.registry_authority_id)
+        if registry is None or registry.kind not in {
+            AuthorityKind.ORGANISATION_REGISTRY,
+            AuthorityKind.NAMING_REGISTRY,
+        }:
+            diagnostics.append(
+                Diagnostic(
+                    code="invalid_registration_registry",
+                    severity=Severity.ERROR,
+                    location=f"registrations[{i}].registry_authority_id",
+                    message="registration requires an existing registry authority",
+                )
+            )
+        registrar = authorities.get(registration.registrar_authority_id)
+        if registrar is None or registrar.kind != AuthorityKind.REGISTRAR:
+            diagnostics.append(
+                Diagnostic(
+                    code="invalid_registration_registrar",
+                    severity=Severity.ERROR,
+                    location=f"registrations[{i}].registrar_authority_id",
+                    message="registration requires an existing registrar authority",
+                )
+            )
+    for i, allocation in enumerate(spec.allocations):
+        resource = resources.get(allocation.resource_id)
+        if resource is None:
+            diagnostics.append(
+                Diagnostic(
+                    code="missing_allocation_resource",
+                    severity=Severity.ERROR,
+                    location=f"allocations[{i}].resource_id",
+                    message="allocation references a missing resource",
+                )
+            )
+        allocator = authorities.get(allocation.authority_id)
+        if allocator is None:
+            diagnostics.append(
+                Diagnostic(
+                    code="missing_allocation_authority",
+                    severity=Severity.ERROR,
+                    location=f"allocations[{i}].authority_id",
+                    message="allocation references a missing authority",
+                )
+            )
+        elif resource is not None and allocator.kind not in _COMPATIBLE[resource.resource_class]:
+            diagnostics.append(
+                Diagnostic(
+                    code="incompatible_allocation_authority",
+                    severity=Severity.ERROR,
+                    location=f"allocations[{i}].authority_id",
+                    message="allocation authority cannot govern the resource class",
+                )
+            )
+    for i, grant in enumerate(spec.grants):
+        grantor = authorities.get(grant.authority_id)
+        if grantor is None:
+            diagnostics.append(
+                Diagnostic(
+                    code="missing_grant_authority",
+                    severity=Severity.ERROR,
+                    location=f"grants[{i}].authority_id",
+                    message="grant references a missing authority",
+                )
+            )
+        elif unsupported := sorted(set(grant.actions) - set(grantor.controls)):
+            diagnostics.append(
+                Diagnostic(
+                    code="grant_action_not_controlled",
+                    severity=Severity.ERROR,
+                    location=f"grants[{i}].actions",
+                    message=f"authority does not control actions: {', '.join(unsupported)}",
+                )
+            )
+    for i, delegation in enumerate(spec.delegations):
+        source = authorities.get(delegation.from_authority_id)
+        target = authorities.get(delegation.to_authority_id)
+        if source is None:
+            diagnostics.append(
+                Diagnostic(
+                    code="missing_delegation_source",
+                    severity=Severity.ERROR,
+                    location=f"delegations[{i}].from_authority_id",
+                    message="delegation source authority does not exist",
+                )
+            )
+        if target is None:
+            diagnostics.append(
+                Diagnostic(
+                    code="missing_delegation_target",
+                    severity=Severity.ERROR,
+                    location=f"delegations[{i}].to_authority_id",
+                    message="delegation target authority does not exist",
+                )
+            )
+        if source is not None:
+            for resource_class in delegation.resource_classes:
+                if source.kind not in _COMPATIBLE[resource_class]:
+                    diagnostics.append(
+                        Diagnostic(
+                            code="incompatible_delegation_resource",
+                            severity=Severity.ERROR,
+                            location=f"delegations[{i}].resource_classes",
+                            message=f"source authority cannot delegate {resource_class}",
+                        )
+                    )
     for i, governed in enumerate(spec.resources):
         governed_authority = authorities.get(governed.authority_id)
         if governed_authority is None:

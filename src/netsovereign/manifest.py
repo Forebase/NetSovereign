@@ -4,7 +4,15 @@ from __future__ import annotations
 
 from typing import Any
 
-from .authority import Authority, Institution, Mandate
+from .authority import (
+    Allocation,
+    Authority,
+    Delegation,
+    Grant,
+    Institution,
+    Mandate,
+    Registration,
+)
 from .base import DomainModel
 from .boundary import ResolverPolicy, derive_resolver_policy
 from .specification import AutonomyDeclaration, ProviderBinding, WorldSpec
@@ -46,6 +54,10 @@ class WorldManifest(DomainModel):
     authority_sources: dict[str, list[str]]
     primary_authority_roles: dict[str, str]
     mandates: list[Mandate]
+    registrations: list[Registration]
+    allocations: list[Allocation]
+    grants: list[Grant]
+    delegations: list[Delegation]
     uncovered_authorities: list[str]
     boundary_posture: dict[str, str]
     resolver: ResolverPolicy
@@ -61,7 +73,8 @@ class WorldManifest(DomainModel):
 
 
 def authority_graph(spec: WorldSpec) -> AuthorityGraph:
-    nodes = [
+    nodes = [GraphNode(id=f"world:{spec.world.id}", type="world")]
+    nodes += [
         GraphNode(id=f"institution:{x.id}", type="institution", attributes={"name": x.name})
         for x in spec.institutions
     ]
@@ -72,6 +85,15 @@ def authority_graph(spec: WorldSpec) -> AuthorityGraph:
     nodes += [
         GraphNode(id=f"resource:{x.id}", type="resource", attributes={"class": x.resource_class})
         for x in spec.resources
+    ]
+    nodes += [GraphNode(id=f"mandate:{x.id}", type="mandate") for x in spec.mandates]
+    nodes += [GraphNode(id=f"registration:{x.id}", type="registration") for x in spec.registrations]
+    nodes += [GraphNode(id=f"allocation:{x.id}", type="allocation") for x in spec.allocations]
+    nodes += [GraphNode(id=f"grant:{x.id}", type="grant") for x in spec.grants]
+    nodes += [GraphNode(id=f"delegation:{x.id}", type="delegation") for x in spec.delegations]
+    nodes += [
+        GraphNode(id=f"peer:{x.id}", type="peer", attributes={"display_name": x.display_name})
+        for x in spec.boundary.peers
     ]
     edges = [
         GraphEdge(
@@ -106,6 +128,63 @@ def authority_graph(spec: WorldSpec) -> AuthorityGraph:
         )
         for x in spec.boundary.authority_imports
     ]
+    for registration in spec.registrations:
+        node = f"registration:{registration.id}"
+        edges.extend(
+            (
+                GraphEdge(
+                    source=node, target=f"resource:{registration.resource_id}", type="registers"
+                ),
+                GraphEdge(
+                    source=f"authority:{registration.registrar_authority_id}",
+                    target=node,
+                    type="submits_registration",
+                ),
+                GraphEdge(
+                    source=node,
+                    target=f"authority:{registration.registry_authority_id}",
+                    type="submitted_to",
+                ),
+            )
+        )
+    for allocation in spec.allocations:
+        edges.extend(
+            (
+                GraphEdge(
+                    source=f"authority:{allocation.authority_id}",
+                    target=f"allocation:{allocation.id}",
+                    type="makes_allocation",
+                ),
+                GraphEdge(
+                    source=f"allocation:{allocation.id}",
+                    target=f"resource:{allocation.resource_id}",
+                    type="allocates",
+                ),
+            )
+        )
+    for grant in spec.grants:
+        edges.append(
+            GraphEdge(
+                source=f"authority:{grant.authority_id}",
+                target=f"grant:{grant.id}",
+                type="issues_grant",
+            )
+        )
+    for delegation in spec.delegations:
+        edges.extend(
+            (
+                GraphEdge(
+                    source=f"authority:{delegation.from_authority_id}",
+                    target=f"delegation:{delegation.id}",
+                    type="delegates",
+                ),
+                GraphEdge(
+                    source=f"delegation:{delegation.id}",
+                    target=f"authority:{delegation.to_authority_id}",
+                    type="delegates_to",
+                ),
+            )
+        )
     return AuthorityGraph(
         nodes=sorted(nodes, key=lambda x: x.id),
         edges=sorted(edges, key=lambda x: (x.source, x.target, x.type)),
@@ -155,6 +234,10 @@ def build_manifest(spec: WorldSpec) -> WorldManifest:
         authority_sources=sources,
         primary_authority_roles=dict(sorted(roles.items())),
         mandates=spec.mandates,
+        registrations=spec.registrations,
+        allocations=spec.allocations,
+        grants=spec.grants,
+        delegations=spec.delegations,
         uncovered_authorities=uncovered,
         boundary_posture={
             "real_internet": spec.boundary.real_internet,

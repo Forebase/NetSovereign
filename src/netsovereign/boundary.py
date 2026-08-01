@@ -103,6 +103,10 @@ class BoundaryPolicy(DomainModel):
             i.mode == CrossWorldPosture.FEDERATED for i in self.authority_imports
         ):
             raise ValueError("federation requires an explicit federated authority import")
+        if self.cross_world == CrossWorldPosture.PEERED and any(
+            i.mode != CrossWorldPosture.PEERED for i in self.authority_imports
+        ):
+            raise ValueError("peered posture accepts discovery-only peered imports")
         return self
 
 
