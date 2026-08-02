@@ -72,6 +72,17 @@ def validate_spec(spec: WorldSpec) -> list[Diagnostic]:
         diagnostics.extend(_duplicates(getattr(spec, name), name))
     institutions = {x.id for x in spec.institutions}
     authorities = {x.id: x for x in spec.authorities}
+    capability_ids = {capability.id for capability in spec.capabilities}
+    for i, binding in enumerate(spec.provider_bindings):
+        if binding.capability not in capability_ids:
+            diagnostics.append(
+                Diagnostic(
+                    code="missing_binding_capability",
+                    severity=Severity.ERROR,
+                    location=f"providerBindings[{i}].capability",
+                    message=f"provider binding references undeclared capability {binding.capability!r}",
+                )
+            )
     for i, authority in enumerate(spec.authorities):
         if authority.operator_institution_id not in institutions:
             diagnostics.append(
@@ -243,6 +254,15 @@ def validate_spec(spec: WorldSpec) -> list[Diagnostic]:
                             severity=Severity.ERROR,
                             location=f"delegations[{i}].resource_classes",
                             message=f"source authority cannot delegate {resource_class}",
+                        )
+                    )
+                if target is not None and target.kind not in _COMPATIBLE[resource_class]:
+                    diagnostics.append(
+                        Diagnostic(
+                            code="incompatible_delegation_target",
+                            severity=Severity.ERROR,
+                            location=f"delegations[{i}].resource_classes",
+                            message=f"target authority cannot govern delegated {resource_class}",
                         )
                     )
     for i, governed in enumerate(spec.resources):

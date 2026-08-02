@@ -102,6 +102,24 @@ def test_empty_imports_and_bad_federation():
         )
 
 
+def test_boundary_rejects_duplicate_peers_and_exports_without_federation():
+    with pytest.raises(ValidationError, match="peer identifiers must be unique"):
+        BoundaryPolicy.model_validate(
+            {
+                "cross_world": "peered",
+                "peers": [{"id": "duplicate"}, {"id": "duplicate"}],
+            }
+        )
+    with pytest.raises(ValidationError, match="imports, or exports"):
+        BoundaryPolicy(cross_world="none", authority_exports=["root-naming"])
+    with pytest.raises(ValidationError, match="exports require federated"):
+        BoundaryPolicy(
+            cross_world="peered",
+            peers=[{"id": "peer"}],
+            authority_exports=["root-naming"],
+        )
+
+
 def test_semantic_failures_and_duplicates():
     spec = load_spec(ROOT / "examples/invalid/broken-operator.yaml")
     assert {d.code for d in validate_spec(spec)} >= {
@@ -213,6 +231,29 @@ def test_mandate_action_must_be_controlled():
     assert "mandate_action_not_controlled" in {
         item.code for item in validate_spec(WorldSpec.model_validate(data))
     }
+
+
+def test_provider_binding_requires_declared_capability():
+    data = yaml.safe_load((ROOT / "examples/minimal/world.yaml").read_text())
+    data["providerBindings"][0]["capability"] = "misspelled-capability"
+    diagnostics = validate_spec(WorldSpec.model_validate(data))
+    assert "missing_binding_capability" in {item.code for item in diagnostics}
+    assert has_errors(diagnostics)
+
+
+def test_delegation_target_must_support_resource_class():
+    data = yaml.safe_load((ROOT / "examples/minimal/world.yaml").read_text())
+    data["delegations"] = [
+        {
+            "id": "bad-target",
+            "from_authority_id": "root-naming",
+            "to_authority_id": "transit",
+            "resource_classes": ["name"],
+        }
+    ]
+    diagnostics = validate_spec(WorldSpec.model_validate(data))
+    assert "incompatible_delegation_target" in {item.code for item in diagnostics}
+    assert has_errors(diagnostics)
 
 
 def test_cli_success_failure_and_output():

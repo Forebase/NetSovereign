@@ -86,14 +86,19 @@ class BoundaryPolicy(DomainModel):
     @model_validator(mode="after")
     def coherent(self) -> BoundaryPolicy:
         active = [p for p in self.peers if p.active]
+        peer_ids = [peer.id for peer in self.peers]
+        if len(peer_ids) != len(set(peer_ids)):
+            raise ValueError("peer identifiers must be unique")
         if self.real_internet == InternetPosture.ISOLATED and self.approved_upstream_resolvers:
             raise ValueError("isolated posture cannot use upstream resolvers")
         if self.real_internet == InternetPosture.SHADOWED and not self.approved_upstream_resolvers:
             raise ValueError("shadowed posture requires approved upstream resolvers")
         if self.real_internet == InternetPosture.MIRRORED and not self.mirrors:
             raise ValueError("mirrored posture requires a mirror table")
-        if self.cross_world == CrossWorldPosture.NONE and (active or self.authority_imports):
-            raise ValueError("cross-world none cannot have active peers or imports")
+        if self.cross_world == CrossWorldPosture.NONE and (
+            active or self.authority_imports or self.authority_exports
+        ):
+            raise ValueError("cross-world none cannot have active peers, imports, or exports")
         if (
             self.cross_world in (CrossWorldPosture.PEERED, CrossWorldPosture.FEDERATED)
             and not active
@@ -107,6 +112,8 @@ class BoundaryPolicy(DomainModel):
             i.mode != CrossWorldPosture.PEERED for i in self.authority_imports
         ):
             raise ValueError("peered posture accepts discovery-only peered imports")
+        if self.cross_world != CrossWorldPosture.FEDERATED and self.authority_exports:
+            raise ValueError("authority exports require federated posture")
         return self
 
 
