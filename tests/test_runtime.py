@@ -203,3 +203,92 @@ def test_interruption_after_apply_resumes_by_observation_without_duplicate():
     changed = executable.model_copy(update={"fingerprint": "changed"})
     with pytest.raises(ValueError):
         run(RuntimeExecutor(registry, repository).execute(changed, run_id=run_record.id))
+
+
+def test_dry_run_failure_never_compensates_simulated_operations():
+    _, _, plan = admitted_plan(two=True)
+    provider = FakeProvider()
+    registry = setup(provider)
+    executable = compile_plan(plan, registry, failure_posture=FailurePosture.COMPENSATE_ALL)
+    executable.operations[-1].dry_run_compatible = False
+    # Restore integrity after changing an explicit compilation input for this scenario.
+    from netsovereign.canonical import digest
+
+    executable.fingerprint = digest(
+        {
+            "source": executable.source_plan_id,
+            "from": executable.from_revision,
+            "to": executable.desired_revision,
+            "operations": [item.model_dump(mode="json") for item in executable.operations],
+        }
+    )
+    report = run(
+        RuntimeExecutor(registry, InMemoryExecutionRepository()).execute(executable, dry_run=True)
+    )
+    assert report.status == "partially_succeeded"
+    assert not any(
+        action in {"apply", "compensate", "delete"} for action, _ in provider.call_history
+    )
+
+
+def test_continue_independent_skips_failed_dependants_but_runs_independent_work():
+    _, _, plan = admitted_plan(two=True)
+    third = plan.steps[0].model_copy(
+        update={
+            "id": plan.steps[0].id + "-dependent",
+            "target": "resources/dependent",
+            "depends_on": [plan.steps[0].id],
+        }
+    )
+    plan.steps.append(third)
+    provider = FakeProvider()
+    registry = setup(provider)
+    executable = compile_plan(plan, registry, failure_posture=FailurePosture.CONTINUE_INDEPENDENT)
+    first = next(item for item in executable.operations if item.source_step_id == plan.steps[0].id)
+    independent = next(
+        item for item in executable.operations if item.source_step_id == plan.steps[1].id
+    )
+    dependent = next(item for item in executable.operations if item.source_step_id == third.id)
+    provider.inject_failure(first.id, FailureClass.PERMANENT)
+    report = run(RuntimeExecutor(registry, InMemoryExecutionRepository()).execute(executable))
+    assert report.run.operations[first.id].state == "failed"
+    assert report.run.operations[independent.id].state == "verified"
+    assert report.run.operations[dependent.id].state == "skipped"
+    assert ("apply", dependent.id) not in provider.call_history
+
+
+def test_resume_while_observing_repeats_observation_only():
+    _, _, plan = admitted_plan()
+    provider = FakeProvider()
+    registry = setup(provider)
+    executable = compile_plan(plan, registry)
+    repository = InMemoryExecutionRepository()
+    run_record = repository.create(executable, False, datetime.now(UTC))
+    operation = executable.operations[0]
+    record = run_record.operations[operation.id]
+    record.transition(OperationState.VALIDATED, "validated", datetime.now(UTC))
+    record.transition(OperationState.READY, "ready", datetime.now(UTC))
+    record.transition(OperationState.RUNNING, "apply", datetime.now(UTC))
+    context = __import__(
+        "netsovereign.providers.contracts", fromlist=["ProviderContext"]
+    ).ProviderContext(
+        run_id=run_record.id,
+        operation_id=operation.id,
+        idempotency_key=operation.idempotency_key,
+    )
+    result = run(provider.apply(operation, context))
+    record.provider_result = result
+    record.transition(OperationState.SUCCEEDED, "applied", datetime.now(UTC))
+    record.transition(OperationState.OBSERVING, "interrupted", datetime.now(UTC))
+    report = run(RuntimeExecutor(registry, repository).execute(executable, run_id=run_record.id))
+    assert report.status == "succeeded"
+    assert len([call for call in provider.call_history if call[0] == "apply"]) == 1
+
+
+def test_empty_plan_is_terminally_successful():
+    _, _, plan = admitted_plan()
+    plan.steps = []
+    registry = setup()
+    executable = compile_plan(plan, registry)
+    report = run(RuntimeExecutor(registry, InMemoryExecutionRepository()).execute(executable))
+    assert report.status == "succeeded"

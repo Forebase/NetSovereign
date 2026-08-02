@@ -68,7 +68,11 @@ TRANSITIONS: dict[OperationState, set[OperationState]] = {
         OperationState.SKIPPED,
     },
     OperationState.VALIDATED: {OperationState.READY, OperationState.FAILED},
-    OperationState.READY: {OperationState.RUNNING, OperationState.SUCCEEDED},
+    OperationState.READY: {
+        OperationState.RUNNING,
+        OperationState.SUCCEEDED,
+        OperationState.FAILED,
+    },
     OperationState.RUNNING: {
         OperationState.SUCCEEDED,
         OperationState.RETRY_WAIT,
@@ -295,6 +299,8 @@ class ExecutionRun(DomainModel):
     @property
     def status(self) -> PlanStatus:
         states = {item.state for item in self.operations.values()}
+        if not states:
+            return PlanStatus.SUCCEEDED
         if states and states <= {OperationState.VERIFIED}:
             return PlanStatus.SUCCEEDED
         if states and states <= {OperationState.COMPENSATED}:
@@ -416,10 +422,25 @@ class RuntimeExecutor:
             raise ValueError("incompatible plan or execution mode for resume")
         completed: list[ExecutableOperation] = []
         failed = False
+        operations_by_step = {item.source_step_id: item for item in plan.operations}
         for operation in plan.operations:
             record = run.operations[operation.id]
             if record.state == OperationState.VERIFIED:
                 completed.append(operation)
+                continue
+            unmet_dependencies = [
+                dependency
+                for dependency in operation.depends_on
+                if run.operations[operations_by_step[dependency].id].state
+                != OperationState.VERIFIED
+            ]
+            if unmet_dependencies:
+                if record.state == OperationState.PENDING:
+                    record.transition(
+                        OperationState.SKIPPED,
+                        f"dependencies not verified: {', '.join(sorted(unmet_dependencies))}",
+                        self.clock(),
+                    )
                 continue
             if failed and operation.failure_posture != FailurePosture.CONTINUE_INDEPENDENT:
                 if record.state == OperationState.PENDING:
@@ -434,26 +455,36 @@ class RuntimeExecutor:
                 idempotency_key=operation.idempotency_key,
                 dry_run=dry_run,
             )
-            # An interrupted apply leaves RUNNING: observe before any replay.
-            if record.state == OperationState.RUNNING:
+            # An interrupted apply or observation is resolved by observing before replay.
+            if record.state in {OperationState.RUNNING, OperationState.OBSERVING}:
                 observed = await provider.observe(operation, context)
                 record.observation = observed
                 self._evidence(
                     run, operation, EvidenceKind.OBSERVATION, observed.model_dump(mode="json")
                 )
                 if observed.matches_expected:
-                    record.transition(
-                        OperationState.SUCCEEDED,
-                        "resume observation found applied state",
-                        self.clock(),
-                    )
-                    record.transition(
-                        OperationState.OBSERVING, "verify resumed operation", self.clock()
-                    )
+                    if record.state == OperationState.RUNNING:
+                        record.transition(
+                            OperationState.SUCCEEDED,
+                            "resume observation found applied state",
+                            self.clock(),
+                        )
+                        record.transition(
+                            OperationState.OBSERVING, "verify resumed operation", self.clock()
+                        )
                     record.transition(
                         OperationState.VERIFIED, "expected state observed", self.clock()
                     )
                     completed.append(operation)
+                    continue
+                if record.state == OperationState.OBSERVING:
+                    record.failure = FailureClass.OBSERVATION_MISMATCH
+                    record.transition(
+                        OperationState.FAILED,
+                        "resumed observation did not converge",
+                        self.clock(),
+                    )
+                    failed = True
                     continue
             if record.state != OperationState.PENDING:
                 raise ValueError(f"operation {operation.id} cannot resume from {record.state}")
@@ -555,11 +586,17 @@ class RuntimeExecutor:
                     OperationState.FAILED, "applied state did not converge", self.clock()
                 )
                 failed = True
-        if failed and any(
-            item.failure_posture == FailurePosture.COMPENSATE_ALL for item in plan.operations
+        if (
+            not dry_run
+            and failed
+            and any(
+                item.failure_posture == FailurePosture.COMPENSATE_ALL for item in plan.operations
+            )
         ):
             for operation in reversed(completed):
                 record = run.operations[operation.id]
+                if record.simulated:
+                    continue
                 record.transition(
                     OperationState.COMPENSATING, "reverse-order compensation", self.clock()
                 )
