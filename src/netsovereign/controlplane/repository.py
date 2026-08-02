@@ -6,14 +6,20 @@ import builtins
 import json
 import sqlite3
 from collections.abc import Iterator
-from contextlib import contextmanager
+from contextlib import AbstractContextManager, contextmanager
 from datetime import datetime
 from pathlib import Path
 from typing import Protocol, TypeVar
 
 from pydantic import BaseModel
 
-from .models import Checkpoint, DesiredRevision, LockLease, ReconciliationRecord
+from .models import (
+    CONTROL_PLANE_SCHEMA_VERSION,
+    Checkpoint,
+    DesiredRevision,
+    LockLease,
+    ReconciliationRecord,
+)
 
 T = TypeVar("T", bound=BaseModel)
 
@@ -28,6 +34,8 @@ class ControlPlaneRepository(Protocol):
     def active_revision(self, world_id: str) -> DesiredRevision | None: ...
     def acquire_lock(self, lease: LockLease) -> LockLease | None: ...
     def release_lock(self, key: str, owner: str, reason: str, at: datetime) -> bool: ...
+    def transaction(self) -> AbstractContextManager[None]: ...
+    def incomplete_reconciliations(self) -> builtins.list[ReconciliationRecord]: ...
 
 
 class SQLiteControlPlaneRepository:
@@ -37,7 +45,7 @@ class SQLiteControlPlaneRepository:
     CLI restart-safe without requiring a server and exercises transaction semantics.
     """
 
-    SCHEMA_VERSION = 1
+    SCHEMA_VERSION = CONTROL_PLANE_SCHEMA_VERSION
 
     def __init__(self, path: Path | str):
         self.path = str(path)
@@ -64,12 +72,20 @@ class SQLiteControlPlaneRepository:
         row = self.connection.execute(
             "SELECT value FROM cp_metadata WHERE key='schema_version'"
         ).fetchone()
-        if row and int(row[0]) > self.SCHEMA_VERSION:
-            raise RuntimeError(f"incompatible control-plane schema version {row[0]}")
-        self.connection.execute(
-            "INSERT OR IGNORE INTO cp_metadata VALUES('schema_version',?)",
-            (str(self.SCHEMA_VERSION),),
-        )
+        if row:
+            installed = int(row[0])
+            if installed > self.SCHEMA_VERSION:
+                raise RuntimeError(f"incompatible control-plane schema version {installed}")
+            if installed < self.SCHEMA_VERSION:
+                self.connection.execute(
+                    "UPDATE cp_metadata SET value=? WHERE key='schema_version'",
+                    (str(self.SCHEMA_VERSION),),
+                )
+        else:
+            self.connection.execute(
+                "INSERT INTO cp_metadata VALUES('schema_version',?)",
+                (str(self.SCHEMA_VERSION),),
+            )
         self.connection.commit()
 
     @contextmanager
@@ -108,8 +124,11 @@ class SQLiteControlPlaneRepository:
         return [model.model_validate_json(row[0]) for row in rows]
 
     def set_active_revision(self, world_id: str, revision_id: str) -> None:
-        if self.get("desired", revision_id, DesiredRevision) is None:
+        revision = self.get("desired", revision_id, DesiredRevision)
+        if revision is None:
             raise KeyError(revision_id)
+        if revision.world_id != world_id:
+            raise ValueError("cannot activate a desired revision for a different world")
         self.connection.execute(
             "INSERT INTO cp_active_revisions VALUES(?,?) ON CONFLICT(world_id) DO UPDATE SET revision_id=excluded.revision_id",
             (world_id, revision_id),
@@ -128,6 +147,12 @@ class SQLiteControlPlaneRepository:
             ).fetchone()
             if row and datetime.fromisoformat(row[1]) > lease.acquired_at and row[0] != lease.owner:
                 return None
+            if row and datetime.fromisoformat(row[1]) > lease.acquired_at:
+                return LockLease.model_validate_json(
+                    self.connection.execute(
+                        "SELECT payload FROM cp_locks WHERE lock_key=?", (lease.key,)
+                    ).fetchone()[0]
+                )
             token = (int(row[2]) + 1) if row else 1
             granted = lease.model_copy(update={"fencing_token": token})
             self.connection.execute(
@@ -151,6 +176,8 @@ class SQLiteControlPlaneRepository:
             if not row or row[0] != owner:
                 return False
             current = LockLease.model_validate_json(row[2])
+            if current.released_at is not None:
+                return False
             released = current.model_copy(
                 update={
                     "expires_at": at,

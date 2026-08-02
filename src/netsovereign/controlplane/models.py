@@ -9,13 +9,35 @@ from datetime import UTC, datetime
 from enum import StrEnum
 from typing import Any
 
-from pydantic import Field
+from pydantic import Field, field_validator, model_validator
 
 from ..base import DomainModel
+
+CONTROL_PLANE_SCHEMA_VERSION = 4
+_SECRET_TERMS = ("password", "secret", "token", "private_key", "credential")
 
 
 def now_utc() -> datetime:
     return datetime.now(UTC)
+
+
+def _contains_secret(value: Any) -> bool:
+    if isinstance(value, dict):
+        return any(
+            any(term in str(key).lower() for term in _SECRET_TERMS) or _contains_secret(item)
+            for key, item in value.items()
+        )
+    if isinstance(value, list):
+        return any(_contains_secret(item) for item in value)
+    return False
+
+
+def _require_aware(value: datetime | None) -> datetime | None:
+    if value is None:
+        return None
+    if value.tzinfo is None or value.utcoffset() is None:
+        raise ValueError("control-plane timestamps must be timezone-aware")
+    return value
 
 
 class DesiredRevision(DomainModel):
@@ -32,6 +54,8 @@ class DesiredRevision(DomainModel):
     boundary_policy_digest: str | None = None
     compatibility: dict[str, Any] = Field(default_factory=dict)
     status: str = "accepted"
+
+    _accepted_at_is_aware = field_validator("accepted_at")(_require_aware)
 
 
 class AuthoritativeRecord(DomainModel):
@@ -67,6 +91,8 @@ class ObservedRecord(DomainModel):
     execution_run_id: str | None = None
     operation_id: str | None = None
 
+    _timestamps_are_aware = field_validator("observed_at", "stale_after")(_require_aware)
+
 
 class LockLease(DomainModel):
     key: str
@@ -77,6 +103,16 @@ class LockLease(DomainModel):
     renewed_at: datetime | None = None
     released_at: datetime | None = None
     release_reason: str | None = None
+
+    _timestamps_are_aware = field_validator(
+        "acquired_at", "expires_at", "renewed_at", "released_at"
+    )(_require_aware)
+
+    @model_validator(mode="after")
+    def validate_interval(self) -> LockLease:
+        if self.expires_at < self.acquired_at:
+            raise ValueError("lease expiry cannot precede acquisition")
+        return self
 
 
 class Checkpoint(DomainModel):
@@ -91,8 +127,16 @@ class Checkpoint(DomainModel):
     compensation: dict[str, Any] = Field(default_factory=dict)
     created_at: datetime
     reason: str
-    schema_version: int = 1
+    schema_version: int = CONTROL_PLANE_SCHEMA_VERSION
     previous_checkpoint_id: str | None = None
+
+    _created_at_is_aware = field_validator("created_at")(_require_aware)
+
+    @model_validator(mode="after")
+    def reject_secrets(self) -> Checkpoint:
+        if _contains_secret(self.compensation):
+            raise ValueError("checkpoint compensation state must not contain secrets")
+        return self
 
 
 class ReconciliationRecord(DomainModel):
@@ -110,6 +154,8 @@ class ReconciliationRecord(DomainModel):
     result: str = "running"
     drift_summary: dict[str, int] = Field(default_factory=dict)
     conformance_summary: dict[str, Any] = Field(default_factory=dict)
+
+    _timestamps_are_aware = field_validator("started_at", "completed_at")(_require_aware)
 
 
 class DriftClassification(StrEnum):
@@ -138,3 +184,5 @@ class DriftRecord(DomainModel):
     last_detected_at: datetime
     status: str = "open"
     reconciliation_id: str | None = None
+
+    _timestamps_are_aware = field_validator("first_detected_at", "last_detected_at")(_require_aware)

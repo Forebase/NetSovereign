@@ -14,7 +14,7 @@ from .models import (
     LockLease,
     ObservedRecord,
 )
-from .repository import SQLiteControlPlaneRepository
+from .repository import ControlPlaneRepository
 
 
 def _digest(value: Any) -> str:
@@ -40,7 +40,8 @@ class DriftDetector:
             wanted, actual = expected.get(resource_id), latest.get(resource_id)
             expected_digest = _digest(wanted) if wanted is not None else None
             if actual is None:
-                classification = DriftClassification.MISSING
+                # No observation is not proof that a provider resource is absent.
+                classification = DriftClassification.UNVERIFIABLE
                 provider, capability, observed_digest = "unbound", "unknown", None
             elif wanted is None:
                 classification = DriftClassification.UNEXPECTED
@@ -63,6 +64,9 @@ class DriftDetector:
                     actual.capability,
                     actual.digest,
                 )
+            elif actual.observation_type == "absent":
+                classification = DriftClassification.MISSING
+                provider, capability, observed_digest = actual.provider_id, actual.capability, None
             elif actual.health == "unhealthy":
                 classification = DriftClassification.UNHEALTHY
                 provider, capability, observed_digest = (
@@ -90,9 +94,18 @@ class DriftDetector:
             # Each detection is an immutable journal event. Including the observation
             # time preserves repeated detections instead of conflicting with a prior
             # event for the same resource/classification pair.
-            identity = _digest([revision.revision_id, resource_id, classification, at.isoformat()])[
-                :24
-            ]
+            identity = _digest(
+                [
+                    revision.revision_id,
+                    resource_id,
+                    classification,
+                    expected_digest,
+                    observed_digest,
+                    provider,
+                    capability,
+                    at.isoformat(),
+                ]
+            )[:24]
             records.append(
                 DriftRecord(
                     drift_id=f"drift-{identity}",
@@ -117,21 +130,27 @@ class DriftDetector:
 class ControlPlaneService:
     """Small façade; provider calls remain outside repository transactions."""
 
-    def __init__(self, repository: SQLiteControlPlaneRepository):
+    def __init__(self, repository: ControlPlaneRepository):
         self.repository = repository
         self.drift = DriftDetector()
 
     def accept_revision(self, revision: DesiredRevision) -> DesiredRevision:
         if revision.status != "accepted" or revision.admission.get("status") == "rejected":
-            self.repository.put_immutable("desired", revision.revision_id, revision)
-            self.repository.connection.commit()
+            with self.repository.transaction():
+                self.repository.put_immutable("desired", revision.revision_id, revision)
             return revision
         with self.repository.transaction():
             # The lineage check and active-pointer update share the write lock. This
             # prevents concurrent sibling acceptance from becoming last-writer-wins.
             active = self.repository.active_revision(revision.world_id)
-            if active and revision.parent_revision_id != active.revision_id:
-                raise ValueError("desired revision does not descend from the active revision")
+            if active:
+                if revision.revision_id == active.revision_id:
+                    self.repository.put_immutable("desired", revision.revision_id, revision)
+                    return revision
+                if revision.parent_revision_id != active.revision_id:
+                    raise ValueError("desired revision does not descend from the active revision")
+            elif revision.parent_revision_id is not None:
+                raise ValueError("initial desired revision cannot name a parent")
             self.repository.put_immutable("desired", revision.revision_id, revision)
             self.repository.set_active_revision(revision.world_id, revision.revision_id)
         return revision
@@ -151,6 +170,11 @@ class ControlPlaneService:
                     raise ValueError(f"duplicate declared resource id: {resource_id}")
                 expected[resource_id] = resource
         elif isinstance(declared_resources, dict):
+            if not all(
+                isinstance(key, str) and isinstance(value, dict)
+                for key, value in declared_resources.items()
+            ):
+                raise ValueError("resource mappings require string IDs and object values")
             expected = declared_resources
         else:
             raise ValueError("declared resources must be a list or resource-id mapping")

@@ -4,7 +4,12 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from netsovereign.controlplane.models import DesiredRevision, DriftClassification, ObservedRecord
+from netsovereign.controlplane.models import (
+    Checkpoint,
+    DesiredRevision,
+    DriftClassification,
+    ObservedRecord,
+)
 from netsovereign.controlplane.repository import SQLiteControlPlaneRepository
 from netsovereign.controlplane.service import ControlPlaneService
 
@@ -67,12 +72,21 @@ def test_lock_fencing_survives_release_and_reacquire(tmp_path):
     assert service.repository.release_lock(one.key, "one", "complete", NOW)
     two = service.acquire_world("world", "two", NOW, 10)
     assert two.fencing_token == one.fencing_token + 1
+    assert not service.repository.release_lock(one.key, "one", "duplicate", NOW)
+
+
+def test_active_same_owner_acquire_is_idempotent(tmp_path):
+    service = ControlPlaneService(SQLiteControlPlaneRepository(tmp_path / "cp.db"))
+    one = service.acquire_world("world", "one", NOW, 10)
+    duplicate = service.acquire_world("world", "one", NOW + timedelta(seconds=1), 20)
+    assert duplicate == one
 
 
 @pytest.mark.parametrize(
     ("record", "classification"),
     [
-        (None, DriftClassification.MISSING),
+        (None, DriftClassification.UNVERIFIABLE),
+        ({"digest": None, "observation_type": "absent"}, DriftClassification.MISSING),
         ({"digest": "wrong"}, DriftClassification.CHANGED),
         ({"digest": None}, DriftClassification.UNVERIFIABLE),
         ({"digest": "wrong", "health": "unhealthy"}, DriftClassification.UNHEALTHY),
@@ -92,7 +106,7 @@ def test_drift_classifications(tmp_path, record, classification):
             provider_id="fake",
             binding_id="fake",
             capability="test",
-            observation_type="state",
+            observation_type=record.get("observation_type", "state"),
             representation={},
             observed_at=NOW - timedelta(seconds=1),
             health=record.get("health", "healthy"),
@@ -138,6 +152,65 @@ def test_active_parent_is_read_inside_write_transaction(tmp_path):
     service.accept_revision(revision())
     service.accept_revision(revision("r2", "r1"))
     assert repo.checked
+
+
+def test_revision_acceptance_is_idempotent_and_initial_parent_fails(tmp_path):
+    repo = SQLiteControlPlaneRepository(tmp_path / "cp.db")
+    service = ControlPlaneService(repo)
+    assert service.accept_revision(revision()) == revision()
+    assert service.accept_revision(revision()) == revision()
+    other = SQLiteControlPlaneRepository(tmp_path / "other.db")
+    with pytest.raises(ValueError, match="initial.*parent"):
+        ControlPlaneService(other).accept_revision(revision("r2", "r1"))
+
+
+def test_repository_cannot_activate_revision_for_another_world(tmp_path):
+    repo = SQLiteControlPlaneRepository(tmp_path / "cp.db")
+    with repo.transaction():
+        repo.put_immutable("desired", "r1", revision())
+        with pytest.raises(ValueError, match="different world"):
+            repo.set_active_revision("other", "r1")
+
+
+def test_schema_version_is_upgraded_and_future_version_rejected(tmp_path):
+    path = tmp_path / "cp.db"
+    repo = SQLiteControlPlaneRepository(path)
+    repo.connection.execute("UPDATE cp_metadata SET value='1' WHERE key='schema_version'")
+    repo.connection.commit()
+    repo.connection.close()
+    upgraded = SQLiteControlPlaneRepository(path)
+    assert upgraded.connection.execute(
+        "SELECT value FROM cp_metadata WHERE key='schema_version'"
+    ).fetchone() == ("4",)
+    upgraded.connection.execute("UPDATE cp_metadata SET value='5' WHERE key='schema_version'")
+    upgraded.connection.commit()
+    upgraded.connection.close()
+    with pytest.raises(RuntimeError, match="incompatible"):
+        SQLiteControlPlaneRepository(path)
+
+
+def test_checkpoint_rejects_secret_material():
+    with pytest.raises(ValueError, match="must not contain secrets"):
+        Checkpoint(
+            checkpoint_id="checkpoint",
+            world_id="world",
+            desired_revision_id="r1",
+            plan_fingerprint="fingerprint",
+            run_id="run",
+            completed_operations=[],
+            incomplete_operations=[],
+            latest_observation_ids=[],
+            compensation={"access_token": "sensitive"},
+            created_at=NOW,
+            reason="test",
+        )
+
+
+def test_control_plane_timestamps_must_be_timezone_aware():
+    payload = revision().model_dump()
+    payload["accepted_at"] = NOW.replace(tzinfo=None)
+    with pytest.raises(ValueError, match="timezone-aware"):
+        DesiredRevision.model_validate(payload)
 
 
 def test_transaction_rolls_back(tmp_path):
