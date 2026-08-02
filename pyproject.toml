@@ -4,8 +4,8 @@ build-backend = "hatchling.build"
 
 [project]
 name = "netsovereign"
-version = "0.2.0"
-description = "Provider-neutral domain foundation for sovereign digital worlds"
+version = "0.3.0"
+description = "Provider-neutral compiler and reconciliation runtime for sovereign worlds"
 readme = "README.md"
 requires-python = ">=3.12"
 license = {file = "LICENSE"}
