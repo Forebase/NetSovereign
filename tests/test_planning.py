@@ -28,8 +28,10 @@ def worlds():
 
 
 def test_canonical_digest_is_order_independent():
-    assert canonical_json({"b": [2, 1], "a": 1}) == canonical_json({"a": 1, "b": [1, 2]})
-    assert digest({"b": [2, 1], "a": 1}) == digest({"a": 1, "b": [1, 2]})
+    assert canonical_json({"b": 2, "a": 1}) == canonical_json({"a": 1, "b": 2})
+    assert digest({"controls": ["delegate", "declare"]}) == digest(
+        {"controls": ["declare", "delegate"]}
+    )
 
 
 def test_binding_change_is_separate_and_admitted():
@@ -53,6 +55,13 @@ def test_identity_change_and_deletion_are_rejected():
     assert not decision.admitted and build_plan(decision).steps == []
 
 
+def test_resource_class_change_redefines_stable_identity():
+    current, proposed = worlds()
+    proposed.resources[0].resource_class = "domain"
+    decision = admit_change(current, proposed)
+    assert "resource_identity_redefined" in {issue.code for issue in decision.issues}
+
+
 def test_observation_is_drift_not_authority():
     current, proposed = worlds()
     observed = ObservedStateSnapshot.model_validate(
@@ -65,6 +74,70 @@ def test_observation_is_drift_not_authority():
     )
     decision = admit_change(current, proposed, observed)
     assert decision.admitted and decision.drift[0].classification == "observed_drift"
+
+
+def test_drift_only_plan_contains_a_convergence_step():
+    current, _ = worlds()
+    observed = ObservedStateSnapshot.model_validate(
+        {
+            "world_id": "minimal",
+            "observed_at": "2026-01-01T00:00:00Z",
+            "provenance": "offline-test",
+            "facts": [{"path": "world/name", "value": "Stale materialised name"}],
+        }
+    )
+    decision = admit_change(current, current, observed)
+    plan = build_plan(decision)
+    assert decision.changes == [] and len(decision.drift) == 1
+    assert plan.steps[0].action == "reconcile_drift"
+    assert "converges to declared value" in plan.steps[0].expected_outcomes[0]
+
+
+def test_observed_collection_path_resolves_stable_id():
+    current, _ = worlds()
+    resource = current.resources[0].model_dump(mode="json")
+    observed = ObservedStateSnapshot.model_validate(
+        {
+            "world_id": "minimal",
+            "observed_at": "2026-01-01T00:00:00Z",
+            "provenance": "offline-test",
+            "facts": [{"path": "resources/root-zone", "value": resource}],
+        }
+    )
+    assert admit_change(current, current, observed).drift == []
+
+
+def test_provider_configuration_arrays_remain_ordered():
+    current, proposed = worlds()
+    current.provider_bindings[0].configuration = {"fallbacks": ["primary", "secondary"]}
+    proposed.provider_bindings[0].configuration = {"fallbacks": ["secondary", "primary"]}
+    changes = compare_worlds(current, proposed)
+    assert len(changes) == 1 and changes[0].classification == "provider_binding"
+    assert digest(current) != digest(proposed)
+
+
+def test_mandate_must_cover_action_resource_and_jurisdiction():
+    current, proposed = worlds()
+    proposed.resources.append(
+        proposed.resources[0].model_copy(update={"id": "domain", "resource_class": "domain"})
+    )
+    decision = admit_change(current, proposed)
+    change = next(change for change in decision.changes if change.path == "resources/domain")
+    assert change.authority_id == "root-naming" and change.mandate_id is None
+    assert "missing_applicable_mandate" in {issue.code for issue in decision.issues}
+
+
+def test_change_and_plan_digests_bind_exact_proposed_content():
+    current, first = worlds()
+    second = first.model_copy(deep=True)
+    first.world.name = "First proposed name"
+    second.world.name = "Second proposed name"
+    first_decision = admit_change(current, first)
+    second_decision = admit_change(current, second)
+    first_name = next(change for change in first_decision.changes if change.path == "world/name")
+    second_name = next(change for change in second_decision.changes if change.path == "world/name")
+    assert first_name.id != second_name.id
+    assert build_plan(first_decision).plan_digest != build_plan(second_decision).plan_digest
 
 
 def test_cli_diff_admit_and_plan(tmp_path):

@@ -121,14 +121,46 @@ class ReconciliationPlan(DomainModel):
     explanation: str = "Provider-neutral plan only; no infrastructure was touched."
 
 
-def _normalise(value: Any) -> Any:
+_SET_LIKE_LIST_FIELDS = {
+    "accepted_audiences",
+    "actions",
+    "authority_exports",
+    "claims",
+    "controls",
+    "dns_suffixes",
+    "egress",
+    "ingress",
+    "mail_domains",
+    "resource_classes",
+    "resources",
+}
+
+
+def _normalise(value: Any, path: tuple[str, ...] = ()) -> Any:
+    """Normalise maps and domain sets without changing JSON-array semantics.
+
+    In particular, arrays below a provider binding's free-form ``configuration`` are
+    deliberately order-sensitive.
+    """
+
     if isinstance(value, dict):
-        return {key: _normalise(value[key]) for key in sorted(value)}
+        return {key: _normalise(value[key], (*path, key)) for key in sorted(value)}
     if isinstance(value, list):
-        items = [_normalise(item) for item in value]
-        return sorted(
-            items, key=lambda item: json.dumps(item, sort_keys=True, separators=(",", ":"))
+        items = [_normalise(item, (*path, "[]")) for item in value]
+        in_provider_configuration = "configuration" in path and any(
+            part in {"providerBindings", "provider_bindings"} for part in path
         )
+        collection_is_set = bool(path) and (
+            path[-1] in _COLLECTIONS
+            or path[-1] in {"providerBindings", "externalDependencies"}
+            or path[-1] in _SET_LIKE_LIST_FIELDS
+            or path[-1] in {"peers", "authority_imports", "mirrors"}
+        )
+        if collection_is_set and not in_provider_configuration:
+            return sorted(
+                items, key=lambda item: json.dumps(item, sort_keys=True, separators=(",", ":"))
+            )
+        return items
     return value
 
 
@@ -191,7 +223,7 @@ def _classification(path: str) -> ChangeClassification:
 
 def _authority_for(spec: WorldSpec, collection: str, item: dict[str, Any]) -> str | None:
     if collection == "authorities":
-        return str(item.get("id"))
+        return next((a.id for a in spec.authorities if a.kind == "world_root"), None)
     for field in ("authority_id", "authority", "from_authority_id", "registry_authority_id"):
         if item.get(field):
             return str(item[field])
@@ -201,14 +233,109 @@ def _authority_for(spec: WorldSpec, collection: str, item: dict[str, Any]) -> st
     return None
 
 
-def _mandate_for(spec: WorldSpec, authority_id: str | None) -> str | None:
-    candidates = [
-        m.id for m in spec.mandates if m.authority_id == authority_id and m.status == "active"
-    ]
+def _governed_dimensions(
+    spec: WorldSpec,
+    collection: str,
+    path: str,
+    operation: ChangeOperation,
+    item: Any,
+) -> tuple[str, list[str], str]:
+    """Derive mandate action, resource classes, and jurisdiction for a change."""
+
+    action = "revoke" if operation == ChangeOperation.REMOVE else "declare"
+    resource_classes: list[str] = []
+    if collection == "resources" and isinstance(item, dict) and item.get("resource_class"):
+        resource_classes = [str(item["resource_class"])]
+    elif collection == "registrations":
+        action, resource_classes = "admit", ["registration"]
+    elif collection == "allocations" and isinstance(item, dict):
+        action, resource_classes = (
+            "allocate",
+            [
+                next(
+                    (
+                        str(resource.resource_class)
+                        for resource in spec.resources
+                        if resource.id == item.get("resource_id")
+                    ),
+                    "number",
+                )
+            ],
+        )
+    elif collection == "grants":
+        action = "delegate"
+    elif collection in {"delegations", "mandates"} and isinstance(item, dict):
+        action, resource_classes = (
+            "delegate",
+            [str(value) for value in item.get("resource_classes", [])],
+        )
+    elif collection == "institutions":
+        action, resource_classes = "admit", ["organisation"]
+    elif collection in {"authorities", "capabilities", "external_dependencies"}:
+        resource_classes = ["world"]
+    elif path.startswith("boundary/"):
+        action, resource_classes = (
+            ("expose", ["route"]) if "exposed" in canonical_json(item) else ("route", ["route"])
+        )
+    elif path.startswith(("autonomy/", "world/")):
+        resource_classes = ["world"]
+    return action, resource_classes, spec.world.id
+
+
+def _constraints_allow(
+    constraints: dict[str, Any], operation: ChangeOperation, path: str, subject: str | None
+) -> bool:
+    """Evaluate the generic constraint vocabulary; unknown constraints fail closed."""
+
+    known = {"operations", "paths", "subject_ids"}
+    if set(constraints) - known:
+        return False
+    if constraints.get("operations") and str(operation) not in constraints["operations"]:
+        return False
+    if constraints.get("paths") and path not in constraints["paths"]:
+        return False
+    return not constraints.get("subject_ids") or subject in constraints["subject_ids"]
+
+
+def _mandate_for(
+    spec: WorldSpec,
+    authority_id: str | None,
+    action: str,
+    resource_classes: list[str],
+    jurisdiction: str,
+    operation: ChangeOperation,
+    path: str,
+    subject: str | None,
+    observed_at: datetime | None = None,
+) -> str | None:
+    """Select an active mandate applicable to every governed dimension."""
+
+    candidates: list[str] = []
+    for mandate in spec.mandates:
+        if mandate.authority_id != authority_id or mandate.status != "active":
+            continue
+        if action not in mandate.actions or not set(resource_classes) <= set(
+            mandate.resource_classes
+        ):
+            continue
+        if mandate.jurisdiction not in {jurisdiction, "*"}:
+            continue
+        if mandate.validity:
+            if observed_at is None:
+                continue
+            if mandate.validity.not_before and observed_at < mandate.validity.not_before:
+                continue
+            if mandate.validity.not_after and observed_at > mandate.validity.not_after:
+                continue
+        if not _constraints_allow(mandate.constraints, operation, path, subject):
+            continue
+        candidates.append(mandate.id)
     return sorted(candidates)[0] if candidates else None
 
 
-def compare_worlds(current: WorldSpec, proposed: WorldSpec) -> list[Change]:
+def compare_worlds(
+    current: WorldSpec, proposed: WorldSpec, evaluated_at: datetime | None = None
+) -> list[Change]:
     """Semantically compare declarations while keeping bindings out of canonical meaning."""
 
     before = current.model_dump(mode="json")
@@ -238,7 +365,21 @@ def compare_worlds(current: WorldSpec, proposed: WorldSpec) -> list[Change]:
             authority = next(
                 (a.id for a in authority_spec.authorities if a.kind == "world_root"), None
             )
-        mandate = _mandate_for(current, authority)
+        governed_item = new if new is not None else old
+        action, resource_classes, jurisdiction = _governed_dimensions(
+            authority_spec, collection, path, operation, governed_item
+        )
+        mandate = _mandate_for(
+            current,
+            authority,
+            action,
+            resource_classes,
+            jurisdiction,
+            operation,
+            path,
+            subject,
+            evaluated_at,
+        )
         risk = (
             Risk.GOVERNED if classification == ChangeClassification.CANONICAL_INTENT else Risk.LOW
         )
@@ -254,7 +395,7 @@ def compare_worlds(current: WorldSpec, proposed: WorldSpec) -> list[Change]:
                 (Risk.TRUST if "federat" in canonical_json(new) else Risk.EXPOSURE),
                 True,
             )
-        ident = digest({"path": path, "operation": operation})[7:19]
+        ident = digest({"path": path, "operation": operation, "before": old, "after": new})[7:19]
         changes.append(
             Change(
                 id=f"change-{ident}",
@@ -299,7 +440,9 @@ def compare_worlds(current: WorldSpec, proposed: WorldSpec) -> list[Change]:
                 add(path, ChangeOperation.ADD, None, new_items[item_id], item_id, collection)
             elif item_id not in new_items:
                 add(path, ChangeOperation.REMOVE, old_items[item_id], None, item_id, collection)
-            elif _normalise(old_items[item_id]) != _normalise(new_items[item_id]):
+            elif _normalise(old_items[item_id], (collection, item_id)) != _normalise(
+                new_items[item_id], (collection, item_id)
+            ):
                 add(
                     path,
                     ChangeOperation.MODIFY,
@@ -319,17 +462,32 @@ def compare_worlds(current: WorldSpec, proposed: WorldSpec) -> list[Change]:
     return sorted(changes, key=lambda change: (change.path, change.operation))
 
 
+def _resolve_semantic_path(document: Any, path: str) -> Any:
+    """Resolve list members by stable ``id`` (or binding capability), never position alone."""
+
+    value = document
+    segments = path.strip("/").split("/")
+    for index, part in enumerate(segments):
+        if isinstance(value, list):
+            collection = segments[index - 1] if index else ""
+            key = "capability" if collection in {"providerBindings", "provider_bindings"} else "id"
+            value = next(
+                item for item in value if isinstance(item, dict) and str(item.get(key)) == part
+            )
+        else:
+            value = value[part]
+    return value
+
+
 def _observed_drift(proposed: WorldSpec, observed: ObservedStateSnapshot | None) -> list[Change]:
     if observed is None:
         return []
     declared = proposed.model_dump(mode="json")
     drift: list[Change] = []
     for fact in sorted(observed.facts, key=lambda item: item.path):
-        value: Any = declared
         try:
-            for part in fact.path.strip("/").split("/"):
-                value = value[int(part)] if isinstance(value, list) else value[part]
-        except (KeyError, IndexError, ValueError, TypeError):
+            value = _resolve_semantic_path(declared, fact.path)
+        except (KeyError, StopIteration, TypeError):
             value = None
         if _normalise(value) != _normalise(fact.value):
             drift.append(
@@ -349,7 +507,7 @@ def _observed_drift(proposed: WorldSpec, observed: ObservedStateSnapshot | None)
 def admit_change(
     current: WorldSpec, proposed: WorldSpec, observed: ObservedStateSnapshot | None = None
 ) -> AdmissionDecision:
-    changes = compare_worlds(current, proposed)
+    changes = compare_worlds(current, proposed, observed.observed_at if observed else None)
     issues: list[AdmissionIssue] = []
     if current.world.id != proposed.world.id:
         issues.append(
@@ -411,7 +569,8 @@ def admit_change(
         if (
             change.path.startswith("resources/")
             and change.operation == ChangeOperation.MODIFY
-            and (change.before or {}).get("class") != (change.after or {}).get("class")
+            and (change.before or {}).get("resource_class")
+            != (change.after or {}).get("resource_class")
         ):
             issues.append(
                 AdmissionIssue(
@@ -480,9 +639,16 @@ def admit_change(
 def build_plan(decision: AdmissionDecision) -> ReconciliationPlan:
     steps: list[PlanStep] = []
     if decision.admitted:
-        for index, change in enumerate(decision.changes, 1):
+        convergence = [*decision.changes, *decision.drift]
+        for index, change in enumerate(convergence, 1):
             step_id = f"step-{index:04d}"
-            preconditions = [f"accepted revision is {decision.current.revision}"]
+            is_drift = change.classification == ChangeClassification.OBSERVED_DRIFT
+            preconditions = [
+                f"accepted revision is {decision.current.revision}",
+                f"proposed world digest is {decision.proposed.world_digest}",
+            ]
+            if is_drift:
+                preconditions.append(f"observed {change.path} still equals recorded evidence")
             if change.mandate_id:
                 preconditions.append(f"mandate {change.mandate_id} remains active")
             if change.approval_required:
@@ -491,12 +657,18 @@ def build_plan(decision: AdmissionDecision) -> ReconciliationPlan:
                 PlanStep(
                     id=step_id,
                     change_id=change.id,
-                    action=str(change.operation),
+                    action="reconcile_drift" if is_drift else str(change.operation),
                     target=change.path,
                     depends_on=[steps[-1].id] if steps else [],
                     preconditions=preconditions,
-                    expected_outcomes=[f"declared {change.path} equals the proposed revision"],
-                    reversible=change.operation != ChangeOperation.REMOVE,
+                    expected_outcomes=[
+                        (
+                            f"observed {change.path} converges to declared value"
+                            if is_drift
+                            else f"declared {change.path} equals the proposed revision"
+                        )
+                    ],
+                    reversible=not is_drift and change.operation != ChangeOperation.REMOVE,
                     authority_id=change.authority_id,
                     mandate_id=change.mandate_id,
                 )
@@ -505,6 +677,11 @@ def build_plan(decision: AdmissionDecision) -> ReconciliationPlan:
         "world": decision.proposed.world_id,
         "from": decision.current.revision,
         "to": decision.proposed.revision,
+        "current_world_digest": decision.current.world_digest,
+        "proposed_world_digest": decision.proposed.world_digest,
+        "proposed_manifest_digest": decision.proposed.manifest_digest,
+        "changes": [change.model_dump(mode="json") for change in decision.changes],
+        "drift": [change.model_dump(mode="json") for change in decision.drift],
         "steps": [s.model_dump(mode="json") for s in steps],
     }
     return ReconciliationPlan(
