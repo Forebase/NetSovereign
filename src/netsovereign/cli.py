@@ -12,6 +12,7 @@ import typer
 import yaml
 from pydantic import BaseModel, ValidationError
 
+from .controlplane.repository import SQLiteControlPlaneRepository
 from .io import load_spec
 from .manifest import build_manifest, explain_manifest
 from .planning import (
@@ -30,6 +31,23 @@ from .specification import WorldSpec
 from .validation import has_errors, validate_spec
 
 app = typer.Typer(no_args_is_help=True, help="Validate and explain sovereign world intent.")
+control_plane_app = typer.Typer(help="Operate the durable local control plane.")
+app.add_typer(control_plane_app, name="control-plane")
+
+
+@control_plane_app.command("init")
+def control_plane_init(
+    database: Annotated[Path, typer.Option(envvar="NETENGINE_CONTROL_PLANE_PATH")] = Path(
+        ".netengine-control.db"
+    ),
+) -> None:
+    """Initialise or inspect a local durable control-plane schema."""
+    repository = SQLiteControlPlaneRepository(database)
+    row = repository.connection.execute(
+        "SELECT value FROM cp_metadata WHERE key='schema_version'"
+    ).fetchone()
+    repository.connection.close()
+    _emit({"database": str(database), "schema_version": int(row[0]), "status": "ready"})
 
 
 def _parse(path: Path) -> WorldSpec:

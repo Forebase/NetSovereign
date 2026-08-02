@@ -1,8 +1,8 @@
 # NetSovereign roadmap
 
-Implementation status: v0.1, v0.2, and the bounded in-memory v0.3 runtime core are
-implemented and tested. v0.4 durability and v0.5 naming materialisation remain
-planned and are not implied by the v0.3 interfaces.
+Implementation status: v0.1 through v0.4 are implemented and tested. v0.4 supplies the
+bounded, single-node durable control-plane seams and PostgreSQL schema; v0.5 naming
+materialisation remains planned and is not implied by those interfaces.
 
 NetSovereign develops authority and intent before operational adapters. Versions v0.2 through v0.4
 are a single dependency chain: real DNS, PKI, identity, or gateway providers must not begin until
