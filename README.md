@@ -1,8 +1,16 @@
 # NetSovereign
 
-> **Experimental / pre-alpha:** v0.1 models intent only. It provides no operational infrastructure or security guarantees.
+> **Experimental / pre-alpha:** v0.1 models intent only. v0.2 is specifically scoped
+> to offline admission against supplied observed-state snapshots; it provides no
+> operational infrastructure or security guarantees.
 
-NetSovereign defines sovereign digital worlds. **NetEngine** is the future compiler and reconciliation runtime that may materialise declared authorities through replaceable providers. Sovereignty means that recognised institutions can govern a world's naming, numbering, registry, trust, identity, transit, mail, and catalogue authority without making any particular service canonical.
+NetSovereign defines sovereign digital worlds. **NetEngine** follows a versioned path:
+v0.2 observation and admission, v0.3 provider-neutral compilation, and v0.4 durable
+reconciliation, after which replaceable operational providers may be developed.
+Operational DNS, PKI, identity, and gateway work is prohibited before that chain is
+complete. Sovereignty means that recognised institutions can govern a world's naming,
+numbering, registry, trust, identity, transit, mail, and catalogue authority without
+making any particular service canonical.
 
 ## Install and use
 
