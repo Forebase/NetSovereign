@@ -20,4 +20,4 @@ netsovereign plan current.yaml proposed.yaml --observed observed.json
 The change commands compare meaning, evaluate declared mandates, classify approval risks and offline
 drift, and describe convergence without executing providers or touching infrastructure.
 
-See [the domain guide](docs/domain-model.md), [v0alpha2 schema guide](docs/schema-v0alpha2.md), and [roadmap](docs/roadmap.md). The broader example is illustrative: assurance claims and provider-shaped seams are declarations, not implemented guarantees.
+See [the domain guide](docs/domain-model.md), [v0.2 change-planning guide](docs/change-planning-v0.2.md), [v0alpha2 schema guide](docs/schema-v0alpha2.md), and [roadmap](docs/roadmap.md). The broader example is illustrative: assurance claims and provider-shaped seams are declarations, not implemented guarantees.

@@ -3,6 +3,10 @@
 from .manifest import WorldManifest, build_manifest
 from .planning import (
     AdmissionDecision,
+    AdmissionStatus,
+    ApprovalEvidence,
+    ObservedStateSnapshot,
+    ParentRevisionReference,
     ReconciliationPlan,
     admit_change,
     build_plan,
@@ -13,7 +17,11 @@ from .validation import Diagnostic, validate_spec
 
 __all__ = [
     "AdmissionDecision",
+    "AdmissionStatus",
+    "ApprovalEvidence",
     "Diagnostic",
+    "ObservedStateSnapshot",
+    "ParentRevisionReference",
     "ReconciliationPlan",
     "WorldManifest",
     "WorldSpec",

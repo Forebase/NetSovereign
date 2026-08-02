@@ -10,6 +10,7 @@ from .authority import (
     AuthorityScope,
     Institution,
     LifecycleMetadata,
+    LifecycleStatus,
     ScopeKind,
 )
 
@@ -41,7 +42,7 @@ def default_authorities() -> list[Authority]:
             operator="world-administration",
             scope=AuthorityScope(kind=cast(ScopeKind, scope)),
             controls=controls,
-            lifecycle=LifecycleMetadata(status=status),
+            lifecycle=LifecycleMetadata(status=cast(LifecycleStatus, status)),
         )
         for id_, kind, scope, controls, status in definitions
     ]

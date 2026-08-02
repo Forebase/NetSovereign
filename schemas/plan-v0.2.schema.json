@@ -1,0 +1,489 @@
+{
+  "$defs": {
+    "Change": {
+      "additionalProperties": false,
+      "properties": {
+        "actionable": {
+          "default": true,
+          "title": "Actionable",
+          "type": "boolean"
+        },
+        "after": {
+          "default": null,
+          "title": "After"
+        },
+        "approval_required": {
+          "default": false,
+          "title": "Approval Required",
+          "type": "boolean"
+        },
+        "authority_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Authority Id"
+        },
+        "before": {
+          "default": null,
+          "title": "Before"
+        },
+        "classification": {
+          "$ref": "#/$defs/ChangeClassification"
+        },
+        "explanation": {
+          "title": "Explanation",
+          "type": "string"
+        },
+        "governance": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/GovernanceRequirement"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "mandate_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Mandate Id"
+        },
+        "operation": {
+          "$ref": "#/$defs/ChangeOperation"
+        },
+        "path": {
+          "title": "Path",
+          "type": "string"
+        },
+        "risk": {
+          "$ref": "#/$defs/Risk",
+          "default": "low"
+        },
+        "subject_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Subject Id"
+        }
+      },
+      "required": [
+        "id",
+        "classification",
+        "operation",
+        "path",
+        "explanation"
+      ],
+      "title": "Change",
+      "type": "object"
+    },
+    "ChangeClassification": {
+      "enum": [
+        "canonical_intent",
+        "capability",
+        "provider_binding",
+        "observed_drift"
+      ],
+      "title": "ChangeClassification",
+      "type": "string"
+    },
+    "ChangeOperation": {
+      "enum": [
+        "add",
+        "modify",
+        "remove"
+      ],
+      "title": "ChangeOperation",
+      "type": "string"
+    },
+    "ExpectedOutcome": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "semantic_path_equals",
+          "default": "semantic_path_equals",
+          "title": "Kind",
+          "type": "string"
+        },
+        "path": {
+          "title": "Path",
+          "type": "string"
+        },
+        "value": {
+          "title": "Value"
+        },
+        "value_digest": {
+          "title": "Value Digest",
+          "type": "string"
+        }
+      },
+      "required": [
+        "path",
+        "value",
+        "value_digest"
+      ],
+      "title": "ExpectedOutcome",
+      "type": "object"
+    },
+    "GovernanceRequirement": {
+      "additionalProperties": false,
+      "properties": {
+        "action": {
+          "$ref": "#/$defs/GovernedAction"
+        },
+        "jurisdiction": {
+          "title": "Jurisdiction",
+          "type": "string"
+        },
+        "resource_classes": {
+          "items": {
+            "$ref": "#/$defs/ResourceClass"
+          },
+          "title": "Resource Classes",
+          "type": "array"
+        }
+      },
+      "required": [
+        "action",
+        "resource_classes",
+        "jurisdiction"
+      ],
+      "title": "GovernanceRequirement",
+      "type": "object"
+    },
+    "GovernedAction": {
+      "enum": [
+        "declare",
+        "admit",
+        "allocate",
+        "delegate",
+        "revoke",
+        "route",
+        "expose"
+      ],
+      "title": "GovernedAction",
+      "type": "string"
+    },
+    "PlanPredicate": {
+      "additionalProperties": false,
+      "properties": {
+        "approval_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Approval Id"
+        },
+        "digest": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Digest"
+        },
+        "kind": {
+          "$ref": "#/$defs/PredicateKind"
+        },
+        "mandate_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Mandate Id"
+        },
+        "path": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Path"
+        },
+        "revision": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Revision"
+        },
+        "value_digest": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Value Digest"
+        }
+      },
+      "required": [
+        "kind"
+      ],
+      "title": "PlanPredicate",
+      "type": "object"
+    },
+    "PlanStep": {
+      "additionalProperties": false,
+      "properties": {
+        "action": {
+          "title": "Action",
+          "type": "string"
+        },
+        "authority_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Authority Id"
+        },
+        "change_id": {
+          "title": "Change Id",
+          "type": "string"
+        },
+        "depends_on": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Depends On",
+          "type": "array"
+        },
+        "expected_outcomes": {
+          "items": {
+            "$ref": "#/$defs/ExpectedOutcome"
+          },
+          "title": "Expected Outcomes",
+          "type": "array"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "mandate_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Mandate Id"
+        },
+        "preconditions": {
+          "items": {
+            "$ref": "#/$defs/PlanPredicate"
+          },
+          "title": "Preconditions",
+          "type": "array"
+        },
+        "reversibility": {
+          "$ref": "#/$defs/Reversibility"
+        },
+        "reversibility_reason": {
+          "title": "Reversibility Reason",
+          "type": "string"
+        },
+        "reversible": {
+          "title": "Reversible",
+          "type": "boolean"
+        },
+        "target": {
+          "title": "Target",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "change_id",
+        "action",
+        "target",
+        "preconditions",
+        "expected_outcomes",
+        "reversible",
+        "reversibility",
+        "reversibility_reason"
+      ],
+      "title": "PlanStep",
+      "type": "object"
+    },
+    "PredicateKind": {
+      "enum": [
+        "accepted_revision_equals",
+        "proposed_digest_equals",
+        "observation_equals",
+        "mandate_active",
+        "approval_present"
+      ],
+      "title": "PredicateKind",
+      "type": "string"
+    },
+    "ResourceClass": {
+      "enum": [
+        "world",
+        "name",
+        "number",
+        "organisation",
+        "domain",
+        "registration",
+        "certificate",
+        "platform_identity",
+        "inworld_identity",
+        "route",
+        "mail_domain",
+        "service"
+      ],
+      "title": "ResourceClass",
+      "type": "string"
+    },
+    "Reversibility": {
+      "enum": [
+        "reversible",
+        "conditionally_reversible",
+        "irreversible",
+        "unknown"
+      ],
+      "title": "Reversibility",
+      "type": "string"
+    },
+    "Risk": {
+      "enum": [
+        "low",
+        "governed",
+        "autonomy_regression",
+        "external_dependency",
+        "trust",
+        "exposure"
+      ],
+      "title": "Risk",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "admitted": {
+      "title": "Admitted",
+      "type": "boolean"
+    },
+    "api_version": {
+      "default": "netsovereign.io/plan/v0.2",
+      "title": "Api Version",
+      "type": "string"
+    },
+    "approval_gates": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Approval Gates",
+      "type": "array"
+    },
+    "drift": {
+      "items": {
+        "$ref": "#/$defs/Change"
+      },
+      "title": "Drift",
+      "type": "array"
+    },
+    "execution": {
+      "default": "not_permitted",
+      "title": "Execution",
+      "type": "string"
+    },
+    "explanation": {
+      "default": "Provider-neutral plan only; no infrastructure was touched.",
+      "title": "Explanation",
+      "type": "string"
+    },
+    "from_revision": {
+      "title": "From Revision",
+      "type": "string"
+    },
+    "plan_digest": {
+      "title": "Plan Digest",
+      "type": "string"
+    },
+    "steps": {
+      "items": {
+        "$ref": "#/$defs/PlanStep"
+      },
+      "title": "Steps",
+      "type": "array"
+    },
+    "to_revision": {
+      "title": "To Revision",
+      "type": "string"
+    },
+    "world_id": {
+      "title": "World Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "world_id",
+    "from_revision",
+    "to_revision",
+    "admitted",
+    "plan_digest",
+    "steps",
+    "drift",
+    "approval_gates"
+  ],
+  "title": "ReconciliationPlan",
+  "type": "object"
+}

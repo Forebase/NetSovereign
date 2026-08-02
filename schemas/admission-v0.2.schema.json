@@ -1,0 +1,400 @@
+{
+  "$defs": {
+    "AcceptedWorldRevision": {
+      "additionalProperties": false,
+      "properties": {
+        "canonical_intent_digest": {
+          "title": "Canonical Intent Digest",
+          "type": "string"
+        },
+        "declaration_digest": {
+          "title": "Declaration Digest",
+          "type": "string"
+        },
+        "manifest_digest": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Manifest Digest"
+        },
+        "materialization_digest": {
+          "title": "Materialization Digest",
+          "type": "string"
+        },
+        "parent_revision": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Parent Revision"
+        },
+        "revision": {
+          "title": "Revision",
+          "type": "string"
+        },
+        "world_digest": {
+          "title": "World Digest",
+          "type": "string"
+        },
+        "world_id": {
+          "title": "World Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "world_id",
+        "revision",
+        "declaration_digest",
+        "canonical_intent_digest",
+        "materialization_digest",
+        "world_digest",
+        "manifest_digest"
+      ],
+      "title": "AcceptedWorldRevision",
+      "type": "object"
+    },
+    "AdmissionIssue": {
+      "additionalProperties": false,
+      "properties": {
+        "code": {
+          "title": "Code",
+          "type": "string"
+        },
+        "message": {
+          "title": "Message",
+          "type": "string"
+        },
+        "path": {
+          "title": "Path",
+          "type": "string"
+        }
+      },
+      "required": [
+        "code",
+        "message",
+        "path"
+      ],
+      "title": "AdmissionIssue",
+      "type": "object"
+    },
+    "AdmissionStatus": {
+      "enum": [
+        "rejected",
+        "pending_approval",
+        "admitted"
+      ],
+      "title": "AdmissionStatus",
+      "type": "string"
+    },
+    "ApprovalEvidence": {
+      "additionalProperties": false,
+      "properties": {
+        "approval_id": {
+          "title": "Approval Id",
+          "type": "string"
+        },
+        "approved_at": {
+          "format": "date-time",
+          "title": "Approved At",
+          "type": "string"
+        },
+        "provenance": {
+          "title": "Provenance",
+          "type": "string"
+        }
+      },
+      "required": [
+        "approval_id",
+        "approved_at",
+        "provenance"
+      ],
+      "title": "ApprovalEvidence",
+      "type": "object"
+    },
+    "Change": {
+      "additionalProperties": false,
+      "properties": {
+        "actionable": {
+          "default": true,
+          "title": "Actionable",
+          "type": "boolean"
+        },
+        "after": {
+          "default": null,
+          "title": "After"
+        },
+        "approval_required": {
+          "default": false,
+          "title": "Approval Required",
+          "type": "boolean"
+        },
+        "authority_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Authority Id"
+        },
+        "before": {
+          "default": null,
+          "title": "Before"
+        },
+        "classification": {
+          "$ref": "#/$defs/ChangeClassification"
+        },
+        "explanation": {
+          "title": "Explanation",
+          "type": "string"
+        },
+        "governance": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/GovernanceRequirement"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "mandate_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Mandate Id"
+        },
+        "operation": {
+          "$ref": "#/$defs/ChangeOperation"
+        },
+        "path": {
+          "title": "Path",
+          "type": "string"
+        },
+        "risk": {
+          "$ref": "#/$defs/Risk",
+          "default": "low"
+        },
+        "subject_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Subject Id"
+        }
+      },
+      "required": [
+        "id",
+        "classification",
+        "operation",
+        "path",
+        "explanation"
+      ],
+      "title": "Change",
+      "type": "object"
+    },
+    "ChangeClassification": {
+      "enum": [
+        "canonical_intent",
+        "capability",
+        "provider_binding",
+        "observed_drift"
+      ],
+      "title": "ChangeClassification",
+      "type": "string"
+    },
+    "ChangeOperation": {
+      "enum": [
+        "add",
+        "modify",
+        "remove"
+      ],
+      "title": "ChangeOperation",
+      "type": "string"
+    },
+    "GovernanceRequirement": {
+      "additionalProperties": false,
+      "properties": {
+        "action": {
+          "$ref": "#/$defs/GovernedAction"
+        },
+        "jurisdiction": {
+          "title": "Jurisdiction",
+          "type": "string"
+        },
+        "resource_classes": {
+          "items": {
+            "$ref": "#/$defs/ResourceClass"
+          },
+          "title": "Resource Classes",
+          "type": "array"
+        }
+      },
+      "required": [
+        "action",
+        "resource_classes",
+        "jurisdiction"
+      ],
+      "title": "GovernanceRequirement",
+      "type": "object"
+    },
+    "GovernedAction": {
+      "enum": [
+        "declare",
+        "admit",
+        "allocate",
+        "delegate",
+        "revoke",
+        "route",
+        "expose"
+      ],
+      "title": "GovernedAction",
+      "type": "string"
+    },
+    "ResourceClass": {
+      "enum": [
+        "world",
+        "name",
+        "number",
+        "organisation",
+        "domain",
+        "registration",
+        "certificate",
+        "platform_identity",
+        "inworld_identity",
+        "route",
+        "mail_domain",
+        "service"
+      ],
+      "title": "ResourceClass",
+      "type": "string"
+    },
+    "Risk": {
+      "enum": [
+        "low",
+        "governed",
+        "autonomy_regression",
+        "external_dependency",
+        "trust",
+        "exposure"
+      ],
+      "title": "Risk",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "admitted": {
+      "title": "Admitted",
+      "type": "boolean"
+    },
+    "api_version": {
+      "default": "netsovereign.io/admission/v0.2",
+      "title": "Api Version",
+      "type": "string"
+    },
+    "approval_gates": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Approval Gates",
+      "type": "array"
+    },
+    "approvals": {
+      "items": {
+        "$ref": "#/$defs/ApprovalEvidence"
+      },
+      "title": "Approvals",
+      "type": "array"
+    },
+    "changes": {
+      "items": {
+        "$ref": "#/$defs/Change"
+      },
+      "title": "Changes",
+      "type": "array"
+    },
+    "current": {
+      "$ref": "#/$defs/AcceptedWorldRevision"
+    },
+    "drift": {
+      "items": {
+        "$ref": "#/$defs/Change"
+      },
+      "title": "Drift",
+      "type": "array"
+    },
+    "evaluated_at": {
+      "anyOf": [
+        {
+          "format": "date-time",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Evaluated At"
+    },
+    "explanation": {
+      "title": "Explanation",
+      "type": "string"
+    },
+    "issues": {
+      "items": {
+        "$ref": "#/$defs/AdmissionIssue"
+      },
+      "title": "Issues",
+      "type": "array"
+    },
+    "proposed": {
+      "$ref": "#/$defs/AcceptedWorldRevision"
+    },
+    "status": {
+      "$ref": "#/$defs/AdmissionStatus"
+    }
+  },
+  "required": [
+    "admitted",
+    "status",
+    "current",
+    "proposed",
+    "changes",
+    "drift",
+    "issues",
+    "approval_gates",
+    "explanation"
+  ],
+  "title": "AdmissionDecision",
+  "type": "object"
+}

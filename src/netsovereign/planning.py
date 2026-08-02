@@ -2,18 +2,21 @@
 
 from __future__ import annotations
 
-import hashlib
-import json
 from datetime import datetime
 from enum import StrEnum
-from typing import Any
+from typing import Any, Literal
 
-from pydantic import Field
+from pydantic import Field, model_validator
 
+from .authority import MandateConstraints, ResourceClass
 from .base import DomainModel
+from .canonical import canonical_json, digest
+from .canonical import normalise as _normalise
 from .manifest import build_manifest
 from .specification import WorldSpec
 from .validation import has_errors, validate_spec
+
+__all__ = ["canonical_json", "digest"]
 
 
 class ChangeClassification(StrEnum):
@@ -38,11 +41,42 @@ class Risk(StrEnum):
     EXPOSURE = "exposure"
 
 
+class GovernedAction(StrEnum):
+    DECLARE = "declare"
+    ADMIT = "admit"
+    ALLOCATE = "allocate"
+    DELEGATE = "delegate"
+    REVOKE = "revoke"
+    ROUTE = "route"
+    EXPOSE = "expose"
+
+
+class GovernanceRequirement(DomainModel):
+    action: GovernedAction
+    resource_classes: list[ResourceClass]
+    jurisdiction: str
+
+
+class AdmissionStatus(StrEnum):
+    REJECTED = "rejected"
+    PENDING_APPROVAL = "pending_approval"
+    ADMITTED = "admitted"
+
+
+class ApprovalEvidence(DomainModel):
+    approval_id: str
+    approved_at: datetime
+    provenance: str
+
+
 class ObservedFact(DomainModel):
     """A non-canonical observation addressed by a stable semantic path."""
 
     path: str
-    value: Any
+    status: Literal["present", "absent", "unknown", "unreadable"] = "present"
+    value: Any = None
+    observed_at: datetime | None = None
+    provenance: str | None = None
 
 
 class ObservedStateSnapshot(DomainModel):
@@ -52,13 +86,32 @@ class ObservedStateSnapshot(DomainModel):
     provenance: str
     facts: list[ObservedFact] = Field(default_factory=list)
 
+    @model_validator(mode="after")
+    def coherent_snapshot(self) -> ObservedStateSnapshot:
+        if self.observed_at.tzinfo is None:
+            raise ValueError("observed_at must include a timezone")
+        paths = [fact.path for fact in self.facts]
+        if len(paths) != len(set(paths)):
+            raise ValueError("observed fact paths must be unique")
+        if any(fact.observed_at and fact.observed_at.tzinfo is None for fact in self.facts):
+            raise ValueError("fact observed_at must include a timezone")
+        return self
+
 
 class AcceptedWorldRevision(DomainModel):
     world_id: str
     revision: str
     parent_revision: str | None = None
+    declaration_digest: str
+    canonical_intent_digest: str
+    materialization_digest: str
     world_digest: str
-    manifest_digest: str
+    manifest_digest: str | None
+
+
+class ParentRevisionReference(DomainModel):
+    revision: str
+    declaration_digest: str
 
 
 class Change(DomainModel):
@@ -71,8 +124,10 @@ class Change(DomainModel):
     after: Any = None
     authority_id: str | None = None
     mandate_id: str | None = None
+    governance: GovernanceRequirement | None = None
     risk: Risk = Risk.LOW
     approval_required: bool = False
+    actionable: bool = True
     explanation: str
 
 
@@ -85,13 +140,48 @@ class AdmissionIssue(DomainModel):
 class AdmissionDecision(DomainModel):
     api_version: str = "netsovereign.io/admission/v0.2"
     admitted: bool
+    status: AdmissionStatus
+    evaluated_at: datetime | None = None
     current: AcceptedWorldRevision
     proposed: AcceptedWorldRevision
     changes: list[Change]
     drift: list[Change]
     issues: list[AdmissionIssue]
     approval_gates: list[str]
+    approvals: list[ApprovalEvidence] = Field(default_factory=list)
     explanation: str
+
+
+class PredicateKind(StrEnum):
+    ACCEPTED_REVISION_EQUALS = "accepted_revision_equals"
+    PROPOSED_DIGEST_EQUALS = "proposed_digest_equals"
+    OBSERVATION_EQUALS = "observation_equals"
+    MANDATE_ACTIVE = "mandate_active"
+    APPROVAL_PRESENT = "approval_present"
+
+
+class PlanPredicate(DomainModel):
+    kind: PredicateKind
+    revision: str | None = None
+    digest: str | None = None
+    mandate_id: str | None = None
+    approval_id: str | None = None
+    path: str | None = None
+    value_digest: str | None = None
+
+
+class ExpectedOutcome(DomainModel):
+    kind: Literal["semantic_path_equals"] = "semantic_path_equals"
+    path: str
+    value: Any
+    value_digest: str
+
+
+class Reversibility(StrEnum):
+    REVERSIBLE = "reversible"
+    CONDITIONALLY_REVERSIBLE = "conditionally_reversible"
+    IRREVERSIBLE = "irreversible"
+    UNKNOWN = "unknown"
 
 
 class PlanStep(DomainModel):
@@ -100,9 +190,11 @@ class PlanStep(DomainModel):
     action: str
     target: str
     depends_on: list[str] = Field(default_factory=list)
-    preconditions: list[str]
-    expected_outcomes: list[str]
+    preconditions: list[PlanPredicate]
+    expected_outcomes: list[ExpectedOutcome]
     reversible: bool
+    reversibility: Reversibility
+    reversibility_reason: str
     authority_id: str | None = None
     mandate_id: str | None = None
 
@@ -121,74 +213,25 @@ class ReconciliationPlan(DomainModel):
     explanation: str = "Provider-neutral plan only; no infrastructure was touched."
 
 
-_SET_LIKE_LIST_FIELDS = {
-    "accepted_audiences",
-    "actions",
-    "authority_exports",
-    "claims",
-    "controls",
-    "dns_suffixes",
-    "egress",
-    "ingress",
-    "mail_domains",
-    "resource_classes",
-    "resources",
-}
-
-
-def _normalise(value: Any, path: tuple[str, ...] = ()) -> Any:
-    """Normalise maps and domain sets without changing JSON-array semantics.
-
-    In particular, arrays below a provider binding's free-form ``configuration`` are
-    deliberately order-sensitive.
-    """
-
-    if isinstance(value, dict):
-        return {key: _normalise(value[key], (*path, key)) for key in sorted(value)}
-    if isinstance(value, list):
-        items = [_normalise(item, (*path, "[]")) for item in value]
-        in_provider_configuration = "configuration" in path and any(
-            part in {"providerBindings", "provider_bindings"} for part in path
-        )
-        collection_is_set = bool(path) and (
-            path[-1] in _COLLECTIONS
-            or path[-1] in {"providerBindings", "externalDependencies"}
-            or path[-1] in _SET_LIKE_LIST_FIELDS
-            or path[-1] in {"peers", "authority_imports", "mirrors"}
-        )
-        if collection_is_set and not in_provider_configuration:
-            return sorted(
-                items, key=lambda item: json.dumps(item, sort_keys=True, separators=(",", ":"))
-            )
-        return items
-    return value
-
-
-def canonical_json(value: Any) -> str:
-    """Return stable JSON independent of declaration ordering and formatting."""
-
-    if isinstance(value, DomainModel):
-        value = value.model_dump(mode="json", by_alias=True)
-    return json.dumps(_normalise(value), sort_keys=True, separators=(",", ":"), ensure_ascii=False)
-
-
-def digest(value: Any) -> str:
-    return "sha256:" + hashlib.sha256(canonical_json(value).encode()).hexdigest()
-
-
 def accepted_revision(spec: WorldSpec, parent_revision: str | None = None) -> AcceptedWorldRevision:
     diagnostics = validate_spec(spec)
-    manifest_value: Any = (
-        {"invalid_world": spec.model_dump(mode="json")}
-        if has_errors(diagnostics)
-        else build_manifest(spec)
-    )
+    declaration = spec.model_dump(mode="json", by_alias=True)
+    intent = {key: value for key, value in declaration.items() if key != "providerBindings"}
+    intent["world"] = {key: value for key, value in intent["world"].items() if key != "revision"}
+    materialization = {
+        "capabilities": declaration["capabilities"],
+        "providerBindings": declaration["providerBindings"],
+    }
+    declaration_digest = digest(declaration)
     return AcceptedWorldRevision(
         world_id=spec.world.id,
         revision=spec.world.revision,
         parent_revision=parent_revision,
-        world_digest=digest(spec),
-        manifest_digest=digest(manifest_value),
+        declaration_digest=declaration_digest,
+        canonical_intent_digest=digest(intent),
+        materialization_digest=digest(materialization),
+        world_digest=declaration_digest,
+        manifest_digest=None if has_errors(diagnostics) else digest(build_manifest(spec)),
     )
 
 
@@ -205,6 +248,26 @@ _COLLECTIONS = (
     "provider_bindings",
     "external_dependencies",
 )
+
+_LIFECYCLE_TRANSITIONS = {
+    "proposed": {"active", "retired"},
+    "deferred": {"active", "retired"},
+    "active": {"suspended", "retired"},
+    "suspended": {"active", "retired"},
+    "retired": set(),
+}
+
+_AUTONOMY_LEVEL = {
+    "externally_dependent": 0,
+    "partially_autonomous": 1,
+    "authority_autonomous": 2,
+}
+
+
+def _lifecycle_status(collection: str, value: dict[str, Any]) -> str:
+    if collection == "authorities":
+        return str((value.get("lifecycle") or {}).get("status", "active"))
+    return str(value.get("status", "active"))
 
 
 def _key(collection: str, item: dict[str, Any]) -> str:
@@ -239,70 +302,83 @@ def _governed_dimensions(
     path: str,
     operation: ChangeOperation,
     item: Any,
-) -> tuple[str, list[str], str]:
+) -> GovernanceRequirement:
     """Derive mandate action, resource classes, and jurisdiction for a change."""
 
-    action = "revoke" if operation == ChangeOperation.REMOVE else "declare"
-    resource_classes: list[str] = []
+    action = (
+        GovernedAction.REVOKE if operation == ChangeOperation.REMOVE else GovernedAction.DECLARE
+    )
+    retiring = (path == "world/lifecycle" and item == "retired") or (
+        isinstance(item, dict)
+        and (
+            item.get("status") == "retired"
+            or (item.get("lifecycle") or {}).get("status") == "retired"
+        )
+    )
+    if retiring:
+        action = GovernedAction.REVOKE
+    resource_classes: list[ResourceClass] = []
     if collection == "resources" and isinstance(item, dict) and item.get("resource_class"):
-        resource_classes = [str(item["resource_class"])]
+        resource_classes = [ResourceClass(item["resource_class"])]
     elif collection == "registrations":
-        action, resource_classes = "admit", ["registration"]
+        action, resource_classes = GovernedAction.ADMIT, [ResourceClass.REGISTRATION]
     elif collection == "allocations" and isinstance(item, dict):
         action, resource_classes = (
-            "allocate",
+            GovernedAction.ALLOCATE,
             [
                 next(
                     (
-                        str(resource.resource_class)
+                        ResourceClass(resource.resource_class)
                         for resource in spec.resources
                         if resource.id == item.get("resource_id")
                     ),
-                    "number",
+                    ResourceClass.NUMBER,
                 )
             ],
         )
     elif collection == "grants":
-        action = "delegate"
-    elif collection in {"delegations", "mandates"} and isinstance(item, dict):
+        action = GovernedAction.DELEGATE
+    elif collection in {"delegations", "mandates"} and isinstance(item, dict) and not retiring:
         action, resource_classes = (
-            "delegate",
-            [str(value) for value in item.get("resource_classes", [])],
+            GovernedAction.DELEGATE,
+            [ResourceClass(value) for value in item.get("resource_classes", [])],
         )
-    elif collection == "institutions":
-        action, resource_classes = "admit", ["organisation"]
+    elif collection == "institutions" and not retiring:
+        action, resource_classes = GovernedAction.ADMIT, [ResourceClass.ORGANISATION]
     elif collection in {"authorities", "capabilities", "external_dependencies"}:
-        resource_classes = ["world"]
+        resource_classes = [ResourceClass.WORLD]
     elif path.startswith("boundary/"):
         action, resource_classes = (
-            ("expose", ["route"]) if "exposed" in canonical_json(item) else ("route", ["route"])
+            (GovernedAction.EXPOSE, [ResourceClass.ROUTE])
+            if path == "boundary/real_internet" and item == "exposed"
+            else (GovernedAction.ROUTE, [ResourceClass.ROUTE])
         )
     elif path.startswith(("autonomy/", "world/")):
-        resource_classes = ["world"]
-    return action, resource_classes, spec.world.id
+        resource_classes = [ResourceClass.WORLD]
+    return GovernanceRequirement(
+        action=action, resource_classes=resource_classes, jurisdiction=spec.world.id
+    )
 
 
 def _constraints_allow(
-    constraints: dict[str, Any], operation: ChangeOperation, path: str, subject: str | None
+    constraints: MandateConstraints,
+    operation: ChangeOperation,
+    path: str,
+    subject: str | None,
 ) -> bool:
-    """Evaluate the generic constraint vocabulary; unknown constraints fail closed."""
+    """Evaluate the versioned, provider-neutral mandate constraints."""
 
-    known = {"operations", "paths", "subject_ids"}
-    if set(constraints) - known:
+    if constraints.operations and str(operation) not in constraints.operations:
         return False
-    if constraints.get("operations") and str(operation) not in constraints["operations"]:
+    if constraints.paths and path not in constraints.paths:
         return False
-    if constraints.get("paths") and path not in constraints["paths"]:
-        return False
-    return not constraints.get("subject_ids") or subject in constraints["subject_ids"]
+    return not constraints.subject_ids or subject in constraints.subject_ids
 
 
 def _mandate_for(
     spec: WorldSpec,
     authority_id: str | None,
-    action: str,
-    resource_classes: list[str],
-    jurisdiction: str,
+    requirement: GovernanceRequirement,
     operation: ChangeOperation,
     path: str,
     subject: str | None,
@@ -314,11 +390,11 @@ def _mandate_for(
     for mandate in spec.mandates:
         if mandate.authority_id != authority_id or mandate.status != "active":
             continue
-        if action not in mandate.actions or not set(resource_classes) <= set(
-            mandate.resource_classes
-        ):
+        if requirement.action not in mandate.actions or not set(
+            requirement.resource_classes
+        ) <= set(mandate.resource_classes):
             continue
-        if mandate.jurisdiction not in {jurisdiction, "*"}:
+        if mandate.jurisdiction not in {requirement.jurisdiction, "*"}:
             continue
         if mandate.validity:
             if observed_at is None:
@@ -366,15 +442,13 @@ def compare_worlds(
                 (a.id for a in authority_spec.authorities if a.kind == "world_root"), None
             )
         governed_item = new if new is not None else old
-        action, resource_classes, jurisdiction = _governed_dimensions(
+        governance = _governed_dimensions(
             authority_spec, collection, path, operation, governed_item
         )
         mandate = _mandate_for(
             current,
             authority,
-            action,
-            resource_classes,
-            jurisdiction,
+            governance,
             operation,
             path,
             subject,
@@ -384,21 +458,21 @@ def compare_worlds(
             Risk.GOVERNED if classification == ChangeClassification.CANONICAL_INTENT else Risk.LOW
         )
         approval = risk != Risk.LOW
-        if path == "autonomy/target" and old != new:
+        if path == "autonomy/target" and _AUTONOMY_LEVEL[str(new)] < _AUTONOMY_LEVEL[str(old)]:
             risk, approval = Risk.AUTONOMY_REGRESSION, True
         if path.startswith("external_dependencies/") and operation != ChangeOperation.REMOVE:
             risk, approval = Risk.EXTERNAL_DEPENDENCY, bool((new or {}).get("required", True))
-        if path.startswith("boundary/") and (
-            "federat" in canonical_json(new) or "exposed" in canonical_json(new)
-        ):
-            risk, approval = (
-                (Risk.TRUST if "federat" in canonical_json(new) else Risk.EXPOSURE),
-                True,
-            )
-        ident = digest({"path": path, "operation": operation, "before": old, "after": new})[7:19]
+        federated_import = path == "boundary/authority_imports" and any(
+            item.get("mode") == "federated" for item in (new or [])
+        )
+        if (path == "boundary/cross_world" and new == "federated") or federated_import:
+            risk, approval = Risk.TRUST, True
+        if path == "boundary/real_internet" and new == "exposed":
+            risk, approval = Risk.EXPOSURE, True
+        ident = digest({"path": path, "operation": operation, "before": old, "after": new})
         changes.append(
             Change(
-                id=f"change-{ident}",
+                id=f"change-{ident[7:]}",
                 classification=classification,
                 operation=operation,
                 path=path,
@@ -407,6 +481,9 @@ def compare_worlds(
                 after=new,
                 authority_id=authority,
                 mandate_id=mandate,
+                governance=(
+                    governance if classification == ChangeClassification.CANONICAL_INTENT else None
+                ),
                 risk=risk,
                 approval_required=approval,
                 explanation=f"{operation.value.title()} {path} ({classification.value}).",
@@ -485,30 +562,95 @@ def _observed_drift(proposed: WorldSpec, observed: ObservedStateSnapshot | None)
     declared = proposed.model_dump(mode="json")
     drift: list[Change] = []
     for fact in sorted(observed.facts, key=lambda item: item.path):
+        if fact.status in {"unknown", "unreadable"}:
+            continue
+        declared_exists = True
         try:
             value = _resolve_semantic_path(declared, fact.path)
         except (KeyError, StopIteration, TypeError):
+            declared_exists = False
             value = None
-        if _normalise(value) != _normalise(fact.value):
+        differs = fact.status == "absent" and declared_exists
+        differs = differs or (
+            fact.status == "present"
+            and (not declared_exists or _normalise(value) != _normalise(fact.value))
+        )
+        if differs:
+            collection = fact.path.strip("/").split("/", 1)[0]
+            governed_item = value if isinstance(value, dict) else {}
+            authority = _authority_for(proposed, collection, governed_item)
+            if fact.path.startswith("boundary/"):
+                authority = next((a.id for a in proposed.authorities if a.kind == "transit"), None)
+            elif fact.path.startswith(("world/", "autonomy/")):
+                authority = next(
+                    (a.id for a in proposed.authorities if a.kind == "world_root"), None
+                )
+            governance = _governed_dimensions(
+                proposed, collection, fact.path, ChangeOperation.MODIFY, value
+            )
+            mandate = _mandate_for(
+                proposed,
+                authority,
+                governance,
+                ChangeOperation.MODIFY,
+                fact.path,
+                fact.path.split("/", 2)[1] if "/" in fact.path else None,
+                fact.observed_at or observed.observed_at,
+            )
+            evidence_value = {"status": "absent"} if fact.status == "absent" else fact.value
+            provenance = fact.provenance or observed.provenance
             drift.append(
                 Change(
-                    id=f"drift-{digest(fact.model_dump(mode='json'))[7:19]}",
+                    id=f"drift-{digest(fact.model_dump(mode='json'))[7:]}",
                     classification=ChangeClassification.OBSERVED_DRIFT,
-                    operation=ChangeOperation.MODIFY,
+                    operation=(
+                        ChangeOperation.ADD if fact.status == "absent" else ChangeOperation.MODIFY
+                    ),
                     path=fact.path,
-                    before=fact.value,
+                    before=evidence_value,
                     after=value,
-                    explanation=f"Observed evidence from {observed.provenance} differs from declared intent.",
+                    authority_id=authority,
+                    mandate_id=mandate,
+                    governance=governance,
+                    actionable=declared_exists,
+                    explanation=f"Observed evidence from {provenance} differs from declared intent.",
                 )
             )
     return drift
 
 
 def admit_change(
-    current: WorldSpec, proposed: WorldSpec, observed: ObservedStateSnapshot | None = None
+    current: WorldSpec,
+    proposed: WorldSpec,
+    observed: ObservedStateSnapshot | None = None,
+    *,
+    evaluated_at: datetime | None = None,
+    approvals: list[ApprovalEvidence] | None = None,
+    parent: ParentRevisionReference | None = None,
 ) -> AdmissionDecision:
-    changes = compare_worlds(current, proposed, observed.observed_at if observed else None)
+    changes = compare_worlds(current, proposed, evaluated_at)
     issues: list[AdmissionIssue] = []
+    for diagnostic in validate_spec(current):
+        if diagnostic.severity == "error":
+            issues.append(
+                AdmissionIssue(
+                    code=f"invalid_current_{diagnostic.code}",
+                    path=diagnostic.location,
+                    message=f"Accepted world is invalid: {diagnostic.message}",
+                )
+            )
+    current_reference = accepted_revision(current)
+    if parent and (
+        parent.revision != current_reference.revision
+        or parent.declaration_digest != current_reference.declaration_digest
+    ):
+        issues.append(
+            AdmissionIssue(
+                code="stale_parent_revision",
+                path="proposal/parent",
+                message="Proposal parent revision and digest do not match the accepted world.",
+            )
+        )
     if current.world.id != proposed.world.id:
         issues.append(
             AdmissionIssue(
@@ -546,7 +688,11 @@ def admit_change(
             )
         if change.path.startswith("authorities/") and change.operation == ChangeOperation.MODIFY:
             old, new = change.before or {}, change.after or {}
-            if old.get("kind") != new.get("kind") or old.get("scope") != new.get("scope"):
+            identity_fields = ("kind", "scope", "operator_institution_id", "controls", "source")
+            if any(
+                _normalise(old.get(field)) != _normalise(new.get(field))
+                for field in identity_fields
+            ):
                 issues.append(
                     AdmissionIssue(
                         code="authority_identity_redefined",
@@ -554,11 +700,7 @@ def admit_change(
                         message="A stable authority identity cannot silently change meaning.",
                     )
                 )
-            if (
-                old.get("source") != new.get("source")
-                and old.get("source") != "local"
-                and new.get("source") == "local"
-            ):
+            if old.get("source") != "local" and new.get("source") == "local":
                 issues.append(
                     AdmissionIssue(
                         code="import_became_local",
@@ -569,8 +711,10 @@ def admit_change(
         if (
             change.path.startswith("resources/")
             and change.operation == ChangeOperation.MODIFY
-            and (change.before or {}).get("resource_class")
-            != (change.after or {}).get("resource_class")
+            and any(
+                (change.before or {}).get(field) != (change.after or {}).get(field)
+                for field in ("resource_class", "authority_id")
+            )
         ):
             issues.append(
                 AdmissionIssue(
@@ -579,11 +723,8 @@ def admit_change(
                     message="A stable resource identity cannot silently change class.",
                 )
             )
-        governed = (
-            change.classification == ChangeClassification.CANONICAL_INTENT
-            and not change.path.startswith("world/")
-        )
-        if governed and not change.mandate_id and not change.path.startswith("mandates/"):
+        governed = change.classification == ChangeClassification.CANONICAL_INTENT
+        if governed and not change.mandate_id:
             issues.append(
                 AdmissionIssue(
                     code="missing_applicable_mandate",
@@ -591,10 +732,37 @@ def admit_change(
                     message="No applicable active mandate permits this governed change.",
                 )
             )
+        collection = change.path.split("/", 1)[0]
+        if change.operation == ChangeOperation.MODIFY and collection in {
+            "authorities",
+            "institutions",
+            "mandates",
+        }:
+            old_status = _lifecycle_status(collection, change.before or {})
+            new_status = _lifecycle_status(collection, change.after or {})
+            if old_status != new_status and new_status not in _LIFECYCLE_TRANSITIONS[old_status]:
+                issues.append(
+                    AdmissionIssue(
+                        code="invalid_lifecycle_transition",
+                        path=change.path,
+                        message=f"Lifecycle transition {old_status} -> {new_status} is not permitted.",
+                    )
+                )
+        if (
+            change.path == "world/lifecycle"
+            and str(change.after) not in _LIFECYCLE_TRANSITIONS[str(change.before)]
+        ):
+            issues.append(
+                AdmissionIssue(
+                    code="invalid_lifecycle_transition",
+                    path=change.path,
+                    message=f"Lifecycle transition {change.before} -> {change.after} is not permitted.",
+                )
+            )
         if (
             change.path == "boundary/authority_imports"
-            and "peered" in canonical_json(change.before)
-            and "federated" in canonical_json(change.after)
+            and any(item.get("mode") == "peered" for item in (change.before or []))
+            and any(item.get("mode") == "federated" for item in (change.after or []))
         ):
             issues.append(
                 AdmissionIssue(
@@ -618,57 +786,165 @@ def admit_change(
             if change.approval_required
         }
     )
+    supplied_approvals = sorted(approvals or [], key=lambda item: item.approval_id)
+    approved_ids = {item.approval_id for item in supplied_approvals}
+    outstanding_gates = [gate for gate in gates if gate not in approved_ids]
     drift = _observed_drift(proposed, observed)
-    admitted = not issues
+    status = (
+        AdmissionStatus.REJECTED
+        if issues
+        else AdmissionStatus.PENDING_APPROVAL
+        if outstanding_gates
+        else AdmissionStatus.ADMITTED
+    )
+    admitted = status == AdmissionStatus.ADMITTED
     return AdmissionDecision(
         admitted=admitted,
-        current=accepted_revision(current),
+        status=status,
+        evaluated_at=evaluated_at,
+        current=current_reference,
         proposed=accepted_revision(proposed, current.world.revision),
         changes=changes,
         drift=drift,
         issues=sorted(issues, key=lambda item: (item.path, item.code)),
-        approval_gates=gates,
+        approval_gates=outstanding_gates,
+        approvals=supplied_approvals,
         explanation=(
-            "Proposal is coherent and admitted subject to listed approvals."
+            "Proposal is coherent, authorised, and admitted."
             if admitted
+            else "Proposal is coherent and authorised but awaits required approval."
+            if status == AdmissionStatus.PENDING_APPROVAL
             else "Proposal is rejected; resolve every admission issue before planning convergence."
         ),
     )
 
 
+def _dependency_targets(change: Change) -> set[str]:
+    """Return changed semantic targets that must converge before this change."""
+
+    item = change.after if isinstance(change.after, dict) else {}
+    collection = change.path.split("/", 1)[0]
+    dependencies: set[str] = set()
+    if collection == "authorities" and item.get("operator_institution_id"):
+        dependencies.add(f"institutions/{item['operator_institution_id']}")
+    elif collection == "mandates" and item.get("authority_id"):
+        dependencies.add(f"authorities/{item['authority_id']}")
+    elif collection == "resources":
+        for field in ("authority_id", "registry_authority_id", "registrar_authority_id"):
+            if item.get(field):
+                dependencies.add(f"authorities/{item[field]}")
+    elif collection == "registrations":
+        if item.get("resource_id"):
+            dependencies.add(f"resources/{item['resource_id']}")
+        for field in ("registry_authority_id", "registrar_authority_id"):
+            if item.get(field):
+                dependencies.add(f"authorities/{item[field]}")
+    elif collection == "allocations":
+        if item.get("resource_id"):
+            dependencies.add(f"resources/{item['resource_id']}")
+        if item.get("authority_id"):
+            dependencies.add(f"authorities/{item['authority_id']}")
+    elif collection == "grants" and item.get("authority_id"):
+        dependencies.add(f"authorities/{item['authority_id']}")
+    elif collection == "delegations":
+        for field in ("from_authority_id", "to_authority_id"):
+            if item.get(field):
+                dependencies.add(f"authorities/{item[field]}")
+    elif collection == "provider_bindings" and item.get("capability"):
+        dependencies.add(f"capabilities/{item['capability']}")
+    return dependencies
+
+
 def build_plan(decision: AdmissionDecision) -> ReconciliationPlan:
     steps: list[PlanStep] = []
-    if decision.admitted:
-        convergence = [*decision.changes, *decision.drift]
+    if decision.status != AdmissionStatus.REJECTED:
+        convergence = [
+            *decision.changes,
+            *(change for change in decision.drift if change.actionable),
+        ]
+        step_ids = {change.id: f"step-{index:04d}" for index, change in enumerate(convergence, 1)}
+        target_steps: dict[str, list[str]] = {}
+        for change in convergence:
+            target_steps.setdefault(change.path, []).append(step_ids[change.id])
         for index, change in enumerate(convergence, 1):
             step_id = f"step-{index:04d}"
             is_drift = change.classification == ChangeClassification.OBSERVED_DRIFT
             preconditions = [
-                f"accepted revision is {decision.current.revision}",
-                f"proposed world digest is {decision.proposed.world_digest}",
+                PlanPredicate(
+                    kind=PredicateKind.ACCEPTED_REVISION_EQUALS,
+                    revision=decision.current.revision,
+                    digest=decision.current.declaration_digest,
+                ),
+                PlanPredicate(
+                    kind=PredicateKind.PROPOSED_DIGEST_EQUALS,
+                    digest=decision.proposed.declaration_digest,
+                ),
             ]
             if is_drift:
-                preconditions.append(f"observed {change.path} still equals recorded evidence")
+                preconditions.append(
+                    PlanPredicate(
+                        kind=PredicateKind.OBSERVATION_EQUALS,
+                        path=change.path,
+                        value_digest=digest(change.before),
+                    )
+                )
             if change.mandate_id:
-                preconditions.append(f"mandate {change.mandate_id} remains active")
+                preconditions.append(
+                    PlanPredicate(
+                        kind=PredicateKind.MANDATE_ACTIVE,
+                        mandate_id=change.mandate_id,
+                    )
+                )
             if change.approval_required:
-                preconditions.append(f"approval approve:{str(change.risk)}:{change.id} is recorded")
+                preconditions.append(
+                    PlanPredicate(
+                        kind=PredicateKind.APPROVAL_PRESENT,
+                        approval_id=f"approve:{str(change.risk)}:{change.id}",
+                    )
+                )
+            reversibility = (
+                Reversibility.IRREVERSIBLE
+                if change.operation == ChangeOperation.REMOVE
+                else Reversibility.CONDITIONALLY_REVERSIBLE
+                if change.classification == ChangeClassification.PROVIDER_BINDING
+                else Reversibility.UNKNOWN
+            )
+            dependency_ids = {
+                dependency_step
+                for target in _dependency_targets(change)
+                for dependency_step in target_steps.get(target, [])
+                if dependency_step != step_id
+            }
+            if is_drift:
+                dependency_ids.update(
+                    dependency_step
+                    for dependency_step in target_steps.get(change.path, [])
+                    if dependency_step != step_id
+                )
             steps.append(
                 PlanStep(
                     id=step_id,
                     change_id=change.id,
                     action="reconcile_drift" if is_drift else str(change.operation),
                     target=change.path,
-                    depends_on=[steps[-1].id] if steps else [],
+                    depends_on=sorted(dependency_ids),
                     preconditions=preconditions,
                     expected_outcomes=[
-                        (
-                            f"observed {change.path} converges to declared value"
-                            if is_drift
-                            else f"declared {change.path} equals the proposed revision"
+                        ExpectedOutcome(
+                            path=change.path,
+                            value=change.after,
+                            value_digest=digest(change.after),
                         )
                     ],
-                    reversible=not is_drift and change.operation != ChangeOperation.REMOVE,
+                    reversible=reversibility == Reversibility.CONDITIONALLY_REVERSIBLE,
+                    reversibility=reversibility,
+                    reversibility_reason=(
+                        "Removal has no provider-neutral inverse."
+                        if reversibility == Reversibility.IRREVERSIBLE
+                        else "A prior replaceable binding can be restored if retained."
+                        if reversibility == Reversibility.CONDITIONALLY_REVERSIBLE
+                        else "v0.2 cannot prove runtime reversibility without a provider contract."
+                    ),
                     authority_id=change.authority_id,
                     mandate_id=change.mandate_id,
                 )
