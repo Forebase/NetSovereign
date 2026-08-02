@@ -146,23 +146,28 @@ class SQLiteControlPlaneRepository:
     def release_lock(self, key: str, owner: str, reason: str, at: datetime) -> bool:
         with self.transaction():
             row = self.connection.execute(
-                "SELECT owner FROM cp_locks WHERE lock_key=?", (key,)
+                "SELECT owner,fencing_token,payload FROM cp_locks WHERE lock_key=?", (key,)
             ).fetchone()
             if not row or row[0] != owner:
                 return False
-            self.connection.execute("DELETE FROM cp_locks WHERE lock_key=?", (key,))
+            current = LockLease.model_validate_json(row[2])
+            released = current.model_copy(
+                update={
+                    "expires_at": at,
+                    "released_at": at,
+                    "release_reason": reason,
+                }
+            )
+            # Retain the row as the per-key fencing counter. A subsequent acquire
+            # replaces the released lease but increments its preserved generation.
+            self.connection.execute(
+                "UPDATE cp_locks SET expires_at=?,payload=? WHERE lock_key=?",
+                (at.isoformat(), released.model_dump_json(), key),
+            )
             self.put_immutable(
                 "lock_history",
                 f"{key}:{at.isoformat()}",
-                LockLease(
-                    key=key,
-                    owner=owner,
-                    acquired_at=at,
-                    expires_at=at,
-                    fencing_token=0,
-                    released_at=at,
-                    release_reason=reason,
-                ),
+                released,
             )
             return True
 

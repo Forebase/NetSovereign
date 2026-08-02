@@ -87,7 +87,12 @@ class DriftDetector:
                     actual.capability,
                     actual.digest,
                 )
-            identity = _digest([revision.revision_id, resource_id, classification])[:24]
+            # Each detection is an immutable journal event. Including the observation
+            # time preserves repeated detections instead of conflicting with a prior
+            # event for the same resource/classification pair.
+            identity = _digest([revision.revision_id, resource_id, classification, at.isoformat()])[
+                :24
+            ]
             records.append(
                 DriftRecord(
                     drift_id=f"drift-{identity}",
@@ -121,10 +126,12 @@ class ControlPlaneService:
             self.repository.put_immutable("desired", revision.revision_id, revision)
             self.repository.connection.commit()
             return revision
-        active = self.repository.active_revision(revision.world_id)
-        if active and revision.parent_revision_id != active.revision_id:
-            raise ValueError("desired revision does not descend from the active revision")
         with self.repository.transaction():
+            # The lineage check and active-pointer update share the write lock. This
+            # prevents concurrent sibling acceptance from becoming last-writer-wins.
+            active = self.repository.active_revision(revision.world_id)
+            if active and revision.parent_revision_id != active.revision_id:
+                raise ValueError("desired revision does not descend from the active revision")
             self.repository.put_immutable("desired", revision.revision_id, revision)
             self.repository.set_active_revision(revision.world_id, revision.revision_id)
         return revision
@@ -133,7 +140,20 @@ class ControlPlaneService:
         revision = self.repository.active_revision(world_id)
         if revision is None:
             raise KeyError(f"no active desired revision for {world_id}")
-        expected = revision.declaration.get("resources", {})
+        declared_resources = revision.declaration.get("resources", {})
+        if isinstance(declared_resources, list):
+            expected: dict[str, dict[str, Any]] = {}
+            for resource in declared_resources:
+                if not isinstance(resource, dict) or not isinstance(resource.get("id"), str):
+                    raise ValueError("each declared resource must be an object with a string id")
+                resource_id = resource["id"]
+                if resource_id in expected:
+                    raise ValueError(f"duplicate declared resource id: {resource_id}")
+                expected[resource_id] = resource
+        elif isinstance(declared_resources, dict):
+            expected = declared_resources
+        else:
+            raise ValueError("declared resources must be a list or resource-id mapping")
         observed = [
             o for o in self.repository.list("observed", ObservedRecord) if o.world_id == world_id
         ]

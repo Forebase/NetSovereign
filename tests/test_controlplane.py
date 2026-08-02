@@ -61,6 +61,14 @@ def test_lock_fencing_owner_and_expiry(tmp_path):
     assert two.fencing_token == one.fencing_token + 1
 
 
+def test_lock_fencing_survives_release_and_reacquire(tmp_path):
+    service = ControlPlaneService(SQLiteControlPlaneRepository(tmp_path / "cp.db"))
+    one = service.acquire_world("world", "one", NOW, 10)
+    assert service.repository.release_lock(one.key, "one", "complete", NOW)
+    two = service.acquire_world("world", "two", NOW, 10)
+    assert two.fencing_token == one.fencing_token + 1
+
+
 @pytest.mark.parametrize(
     ("record", "classification"),
     [
@@ -94,6 +102,42 @@ def test_drift_classifications(tmp_path, record, classification):
         repo.put_immutable("observed", "o1", observed)
         repo.connection.commit()
     assert service.inspect_drift("world", NOW)[0].classification == classification
+
+
+def test_list_shaped_world_resources_are_normalized(tmp_path):
+    repo = SQLiteControlPlaneRepository(tmp_path / "cp.db")
+    service = ControlPlaneService(repo)
+    listed = revision().model_copy(
+        update={"declaration": {"resources": [{"id": "resource", "enabled": True}]}}
+    )
+    service.accept_revision(listed)
+    assert service.inspect_drift("world", NOW)[0].resource_id == "resource"
+
+
+def test_repeated_drift_detection_appends_history(tmp_path):
+    repo = SQLiteControlPlaneRepository(tmp_path / "cp.db")
+    service = ControlPlaneService(repo)
+    service.accept_revision(revision())
+    first = service.inspect_drift("world", NOW)[0]
+    second = service.inspect_drift("world", NOW + timedelta(seconds=1))[0]
+    assert first.drift_id != second.drift_id
+    assert len(repo.list("drift", type(first))) == 2
+
+
+def test_active_parent_is_read_inside_write_transaction(tmp_path):
+    class TransactionCheckingRepository(SQLiteControlPlaneRepository):
+        checked = False
+
+        def active_revision(self, world_id: str) -> DesiredRevision | None:
+            if super().active_revision(world_id) is not None:
+                self.checked = self.connection.in_transaction
+            return super().active_revision(world_id)
+
+    repo = TransactionCheckingRepository(tmp_path / "cp.db")
+    service = ControlPlaneService(repo)
+    service.accept_revision(revision())
+    service.accept_revision(revision("r2", "r1"))
+    assert repo.checked
 
 
 def test_transaction_rolls_back(tmp_path):
