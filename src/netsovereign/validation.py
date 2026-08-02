@@ -73,6 +73,17 @@ def validate_spec(spec: WorldSpec) -> list[Diagnostic]:
     institutions = {x.id for x in spec.institutions}
     authorities = {x.id: x for x in spec.authorities}
     capability_ids = {capability.id for capability in spec.capabilities}
+    binding_capabilities = [binding.capability for binding in spec.provider_bindings]
+    if len(binding_capabilities) != len(set(binding_capabilities)):
+        diagnostics.append(
+            Diagnostic(
+                code="duplicate_provider_binding",
+                severity=Severity.ERROR,
+                location="providerBindings",
+                message="provider binding capabilities must be unique",
+            )
+        )
+    diagnostics.extend(_duplicates(spec.external_dependencies, "externalDependencies"))
     for i, binding in enumerate(spec.provider_bindings):
         if binding.capability not in capability_ids:
             diagnostics.append(

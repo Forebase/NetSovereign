@@ -444,9 +444,8 @@
           "type": "string"
         },
         "status": {
-          "default": "active",
-          "title": "Status",
-          "type": "string"
+          "$ref": "#/$defs/LifecycleStatus",
+          "default": "active"
         }
       },
       "required": [
@@ -496,13 +495,23 @@
           "title": "Since"
         },
         "status": {
-          "default": "active",
-          "title": "Status",
-          "type": "string"
+          "$ref": "#/$defs/LifecycleStatus",
+          "default": "active"
         }
       },
       "title": "LifecycleMetadata",
       "type": "object"
+    },
+    "LifecycleStatus": {
+      "enum": [
+        "proposed",
+        "deferred",
+        "active",
+        "suspended",
+        "retired"
+      ],
+      "title": "LifecycleStatus",
+      "type": "string"
     },
     "Mandate": {
       "additionalProperties": false,
@@ -520,9 +529,7 @@
           "type": "string"
         },
         "constraints": {
-          "additionalProperties": true,
-          "title": "Constraints",
-          "type": "object"
+          "$ref": "#/$defs/MandateConstraints"
         },
         "id": {
           "title": "Id",
@@ -541,9 +548,8 @@
           "type": "array"
         },
         "status": {
-          "default": "active",
-          "title": "Status",
-          "type": "string"
+          "$ref": "#/$defs/LifecycleStatus",
+          "default": "active"
         },
         "validity": {
           "anyOf": [
@@ -565,6 +571,40 @@
         "jurisdiction"
       ],
       "title": "Mandate",
+      "type": "object"
+    },
+    "MandateConstraints": {
+      "additionalProperties": false,
+      "description": "Portable v0.2 admission constraints.",
+      "properties": {
+        "operations": {
+          "items": {
+            "enum": [
+              "add",
+              "modify",
+              "remove"
+            ],
+            "type": "string"
+          },
+          "title": "Operations",
+          "type": "array"
+        },
+        "paths": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Paths",
+          "type": "array"
+        },
+        "subject_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Subject Ids",
+          "type": "array"
+        }
+      },
+      "title": "MandateConstraints",
       "type": "object"
     },
     "Mirror": {

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from enum import StrEnum
-from typing import Any
+from typing import Literal
 
 from pydantic import Field
 
@@ -44,11 +44,19 @@ class AuthoritySource(StrEnum):
     EXTERNAL = "external"
 
 
+class LifecycleStatus(StrEnum):
+    PROPOSED = "proposed"
+    DEFERRED = "deferred"
+    ACTIVE = "active"
+    SUSPENDED = "suspended"
+    RETIRED = "retired"
+
+
 class Institution(DomainModel):
     id: str
     name: str
     description: str | None = None
-    status: str = "active"
+    status: LifecycleStatus = LifecycleStatus.ACTIVE
 
 
 class AuthorityScope(DomainModel):
@@ -57,7 +65,7 @@ class AuthorityScope(DomainModel):
 
 
 class LifecycleMetadata(DomainModel):
-    status: str = "active"
+    status: LifecycleStatus = LifecycleStatus.ACTIVE
     since: datetime | None = None
     revision: str | None = None
 
@@ -93,14 +101,22 @@ class Validity(DomainModel):
     not_after: datetime | None = None
 
 
+class MandateConstraints(DomainModel):
+    """Portable v0.2 admission constraints."""
+
+    operations: list[Literal["add", "modify", "remove"]] = Field(default_factory=list)
+    paths: list[str] = Field(default_factory=list)
+    subject_ids: list[str] = Field(default_factory=list)
+
+
 class Mandate(DomainModel):
     id: str
     authority_id: str = Field(alias="authority")
     actions: list[str] = Field(min_length=1)
     resource_classes: list[ResourceClass] = Field(alias="resources", min_length=1)
     jurisdiction: str
-    status: str = "active"
-    constraints: dict[str, Any] = Field(default_factory=dict)
+    status: LifecycleStatus = LifecycleStatus.ACTIVE
+    constraints: MandateConstraints = Field(default_factory=MandateConstraints)
     validity: Validity | None = None
 
 
