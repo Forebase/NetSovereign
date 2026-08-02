@@ -1,0 +1,3 @@
+real_internet: shadowed
+cross_world: none
+approved_upstream_resolvers: [resolver.example]

@@ -1,0 +1,4 @@
+real_internet: isolated
+cross_world: federated
+peers: [{id: peer-a, dns_suffixes: [peer.] }]
+authority_imports: [{peer_id: peer-a, mode: federated, dns_suffixes: [peer.], oidc_issuer: 'https://issuer.invalid', accepted_audiences: [minimal], provenance: signed-declaration}]

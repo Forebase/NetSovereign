@@ -1,0 +1,40 @@
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[project]
+name = "netsovereign"
+version = "0.1.0"
+description = "Provider-neutral domain foundation for sovereign digital worlds"
+readme = "README.md"
+requires-python = ">=3.12"
+license = {file = "LICENSE"}
+authors = [{name = "Forebase"}]
+dependencies = ["pydantic>=2.10,<3", "PyYAML>=6.0.2,<7", "typer>=0.15,<1"]
+
+[project.optional-dependencies]
+dev = ["build>=1.2", "mypy>=1.14", "pytest>=8.3", "ruff>=0.9", "types-PyYAML>=6.0"]
+
+[project.scripts]
+netsovereign = "netsovereign.cli:app"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/netsovereign"]
+
+[tool.pytest.ini_options]
+addopts = "-q"
+testpaths = ["tests"]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+extend-exclude = ["libs", "packages", "includes", "deploy", "docs/ADR"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+ignore = ["E501"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+packages = ["netsovereign"]

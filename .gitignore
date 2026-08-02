@@ -343,3 +343,5 @@ Temporary Items
 .apdisk
 
 !*/.gitkeep
+__pycache__/
+*.py[cod]

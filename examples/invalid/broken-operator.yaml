@@ -1,0 +1,5 @@
+apiVersion: netsovereign.io/v0alpha2
+kind: World
+world: {id: broken, name: Broken, revision: '1'}
+autonomy: {target: externally_dependent}
+authorities: [{id: root, kind: world_root, operator: missing, scope: {kind: world}, controls: [declare]}]
