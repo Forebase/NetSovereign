@@ -1,5 +1,7 @@
 # NetSovereign
 
+Current package version: **0.4.1**. See the [v0.4.1 enforceable artefact chain](docs/artefact-chain-v0.4.1.md).
+
 > **Experimental / pre-alpha:** v0.2 models intent and plans change only. It provides no operational infrastructure or security guarantees.
 
 NetSovereign defines sovereign digital worlds. **NetEngine** is the future compiler and reconciliation runtime that may materialise declared authorities through replaceable providers. Sovereignty means that recognised institutions can govern a world's naming, numbering, registry, trust, identity, transit, mail, and catalogue authority without making any particular service canonical.

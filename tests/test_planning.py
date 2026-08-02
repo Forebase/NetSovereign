@@ -252,11 +252,26 @@ def test_approval_is_a_distinct_admission_state():
     assert pending.status == "pending_approval" and not pending.admitted
     evidence = ApprovalEvidence(
         approval_id=pending.approval_gates[0],
+        gate_id=pending.approval_gates[0],
+        subject_digest=pending.proposed.declaration_digest,
+        approver="authority:root",
         approved_at=datetime(2026, 1, 1, tzinfo=UTC),
         provenance="offline-review",
+        verification_status="verified",
     )
     admitted = admit_change(current, proposed, approvals=[evidence])
     assert admitted.status == "admitted" and admitted.approval_gates == []
+
+
+def test_equally_applicable_mandates_fail_closed_instead_of_identifier_tiebreak():
+    current, proposed = worlds()
+    proposed.world.name = "Governed rename"
+    duplicate = current.mandates[0].model_copy(update={"id": "duplicate-mandate"}, deep=True)
+    current.mandates.append(duplicate)
+    proposed.mandates.append(duplicate.model_copy(deep=True))
+    decision = admit_change(current, proposed)
+    assert decision.status == "rejected"
+    assert any(issue.code == "missing_applicable_mandate" for issue in decision.issues)
 
 
 def test_invalid_current_world_cannot_authorise_change():

@@ -1,0 +1,395 @@
+{
+  "$defs": {
+    "CapabilityRequirement": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "version": {
+          "default": "1.0",
+          "title": "Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "title": "CapabilityRequirement",
+      "type": "object"
+    },
+    "ExecutableOperation": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "source_step_id": {
+          "title": "Source Step Id",
+          "type": "string"
+        },
+        "authority_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Authority Id"
+        },
+        "mandate_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Mandate Id"
+        },
+        "target": {
+          "title": "Target",
+          "type": "string"
+        },
+        "operation_type": {
+          "title": "Operation Type",
+          "type": "string"
+        },
+        "capability": {
+          "$ref": "#/$defs/CapabilityRequirement"
+        },
+        "provider_id": {
+          "title": "Provider Id",
+          "type": "string"
+        },
+        "provider_binding_id": {
+          "title": "Provider Binding Id",
+          "type": "string"
+        },
+        "depends_on": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Depends On",
+          "type": "array"
+        },
+        "preconditions": {
+          "items": {
+            "$ref": "#/$defs/PlanPredicate"
+          },
+          "title": "Preconditions",
+          "type": "array"
+        },
+        "expected": {
+          "title": "Expected"
+        },
+        "idempotency_key": {
+          "title": "Idempotency Key",
+          "type": "string"
+        },
+        "retry_policy": {
+          "$ref": "#/$defs/RetryPolicy"
+        },
+        "failure_posture": {
+          "$ref": "#/$defs/FailurePosture"
+        },
+        "dry_run_compatible": {
+          "title": "Dry Run Compatible",
+          "type": "boolean"
+        },
+        "order": {
+          "title": "Order",
+          "type": "integer"
+        },
+        "reversibility": {
+          "$ref": "#/$defs/Reversibility",
+          "default": "unknown"
+        },
+        "prior_value": {
+          "default": null,
+          "title": "Prior Value"
+        },
+        "expected_outcome_digest": {
+          "default": "",
+          "title": "Expected Outcome Digest",
+          "type": "string"
+        },
+        "provider_idempotent": {
+          "default": true,
+          "title": "Provider Idempotent",
+          "type": "boolean"
+        },
+        "provider_compensation": {
+          "default": true,
+          "title": "Provider Compensation",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "id",
+        "source_step_id",
+        "authority_id",
+        "mandate_id",
+        "target",
+        "operation_type",
+        "capability",
+        "provider_id",
+        "provider_binding_id",
+        "depends_on",
+        "preconditions",
+        "expected",
+        "idempotency_key",
+        "retry_policy",
+        "failure_posture",
+        "dry_run_compatible",
+        "order"
+      ],
+      "title": "ExecutableOperation",
+      "type": "object"
+    },
+    "FailureClass": {
+      "enum": [
+        "validation",
+        "capability_unavailable",
+        "precondition_failed",
+        "conflict",
+        "transient_provider_failure",
+        "permanent_provider_failure",
+        "timeout",
+        "observation_mismatch",
+        "compensation_failure",
+        "internal_engine_failure"
+      ],
+      "title": "FailureClass",
+      "type": "string"
+    },
+    "FailurePosture": {
+      "enum": [
+        "stop",
+        "compensate_all",
+        "continue_independent",
+        "best_effort_cleanup"
+      ],
+      "title": "FailurePosture",
+      "type": "string"
+    },
+    "PlanPredicate": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "$ref": "#/$defs/PredicateKind"
+        },
+        "revision": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Revision"
+        },
+        "digest": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Digest"
+        },
+        "mandate_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Mandate Id"
+        },
+        "approval_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Approval Id"
+        },
+        "path": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Path"
+        },
+        "value_digest": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Value Digest"
+        },
+        "binding_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Binding Id"
+        },
+        "maximum_age_seconds": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Maximum Age Seconds"
+        }
+      },
+      "required": [
+        "kind"
+      ],
+      "title": "PlanPredicate",
+      "type": "object"
+    },
+    "PredicateKind": {
+      "enum": [
+        "accepted_revision_equals",
+        "proposed_digest_equals",
+        "observation_equals",
+        "mandate_active",
+        "approval_present",
+        "active_desired_revision_equals",
+        "observation_fresh",
+        "provider_binding_equals"
+      ],
+      "title": "PredicateKind",
+      "type": "string"
+    },
+    "RetryPolicy": {
+      "additionalProperties": false,
+      "properties": {
+        "maximum_attempts": {
+          "default": 1,
+          "minimum": 1,
+          "title": "Maximum Attempts",
+          "type": "integer"
+        },
+        "delay_seconds": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Delay Seconds",
+          "type": "number"
+        },
+        "retryable": {
+          "items": {
+            "$ref": "#/$defs/FailureClass"
+          },
+          "title": "Retryable",
+          "type": "array",
+          "uniqueItems": true
+        }
+      },
+      "title": "RetryPolicy",
+      "type": "object"
+    },
+    "Reversibility": {
+      "enum": [
+        "reversible",
+        "conditionally_reversible",
+        "irreversible",
+        "unknown",
+        "cleanup_only",
+        "compensatable_not_rollback_equivalent"
+      ],
+      "title": "Reversibility",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "id": {
+      "title": "Id",
+      "type": "string"
+    },
+    "source_plan_id": {
+      "title": "Source Plan Id",
+      "type": "string"
+    },
+    "world_id": {
+      "title": "World Id",
+      "type": "string"
+    },
+    "from_revision": {
+      "title": "From Revision",
+      "type": "string"
+    },
+    "desired_revision": {
+      "title": "Desired Revision",
+      "type": "string"
+    },
+    "fingerprint": {
+      "title": "Fingerprint",
+      "type": "string"
+    },
+    "operations": {
+      "items": {
+        "$ref": "#/$defs/ExecutableOperation"
+      },
+      "title": "Operations",
+      "type": "array"
+    },
+    "admission_decision_digest": {
+      "default": "",
+      "title": "Admission Decision Digest",
+      "type": "string"
+    }
+  },
+  "required": [
+    "id",
+    "source_plan_id",
+    "world_id",
+    "from_revision",
+    "desired_revision",
+    "fingerprint",
+    "operations"
+  ],
+  "title": "ExecutablePlan",
+  "type": "object"
+}

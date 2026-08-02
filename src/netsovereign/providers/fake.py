@@ -29,13 +29,30 @@ class FakeProvider:
         self.observation_mismatches: set[str] = set()
 
     def describe(self) -> ProviderDescriptor:
+        capabilities = [
+            "resource.manage",
+            "declaration.storage",
+            "registration.submit",
+            "registry.admit",
+            "trust.manage",
+            "number.allocate",
+            "naming.authoritative.manage",
+            "route.manage",
+            "boundary.expose",
+            "identity.platform.manage",
+            "identity.inworld.manage",
+            "mail-domain.manage",
+            "service-catalogue.manage",
+        ]
         return ProviderDescriptor(
             id=self.provider_id,
             version="1.0",
             binding_id=f"{self.provider_id}:memory",
             available=self.available,
             healthy=self.healthy,
-            capabilities=[CapabilityDeclaration(id="resource.manage", dry_run=self.dry_run)],
+            capabilities=[
+                CapabilityDeclaration(id=item, dry_run=self.dry_run) for item in capabilities
+            ],
         )
 
     def inject_failure(self, operation_id: str, failure: FailureClass) -> None:
@@ -107,7 +124,10 @@ class FakeProvider:
             return ProviderResult(
                 success=False, failure=FailureClass.COMPENSATION, message="injected"
             )
-        self.state.pop(operation.target, None)
+        if operation.prior_value is None:
+            self.state.pop(operation.target, None)
+        else:
+            self.state[operation.target] = operation.prior_value
         return ProviderResult(success=True, evidence={"compensated": True})
 
     async def delete(self, operation: Any, context: ProviderContext) -> ProviderResult:

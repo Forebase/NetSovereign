@@ -1,4 +1,15 @@
 # Changelog
+## 0.4.1 - 2026-08-02
+- Added self-verifying admission and reconciliation envelopes under one canonicalisation profile.
+- Added typed capability compilation, injected runtime preconditions, accurate prior-state
+  compensation, and provider claim enforcement.
+- Added a verified admission-to-desired-revision adapter and world-safe revision record IDs.
+- Published v0.4.1 approval, executable-plan and desired-revision schemas. Operational providers
+  and durable/PostgreSQL execution remain out of scope.
+- Review hardening removes inferred runtime facts, rejects ambiguous mandates, types the legacy
+  admission adapter, binds runtime approvals to their decision, and removes order-derived manifest
+  authority selection.
+
 ## 0.3.0 - 2026-08-02
 - Added deterministic compilation of admitted plans, typed provider contracts and
   resolution, explicit execution state and evidence, dry run, retry, compensation,

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Annotated
 
@@ -26,7 +26,7 @@ from .planning import (
 )
 from .providers.fake import FakeProvider
 from .providers.registry import ProviderRegistry
-from .runtime import InMemoryExecutionRepository, RuntimeExecutor, compile_plan
+from .runtime import InMemoryExecutionRepository, RuntimeExecutor, compile_plan, offline_demo_facts
 from .specification import WorldSpec
 from .validation import has_errors, validate_spec
 
@@ -235,7 +235,9 @@ def execute_command(
         executable = compile_plan(intent_plan, registry)
         report = asyncio.run(
             RuntimeExecutor(registry, InMemoryExecutionRepository()).execute(
-                executable, dry_run=dry_run
+                executable,
+                dry_run=dry_run,
+                facts=offline_demo_facts(executable, datetime.now(UTC)),
             )
         )
     except (OSError, ValidationError, ValueError) as exc:

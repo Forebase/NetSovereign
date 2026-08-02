@@ -73,6 +73,109 @@
       "title": "AcceptedWorldRevision",
       "type": "object"
     },
+    "AdmissionDecision": {
+      "additionalProperties": false,
+      "properties": {
+        "api_version": {
+          "default": "netsovereign.io/admission/v0.2",
+          "title": "Api Version",
+          "type": "string"
+        },
+        "admitted": {
+          "title": "Admitted",
+          "type": "boolean"
+        },
+        "status": {
+          "$ref": "#/$defs/AdmissionStatus"
+        },
+        "evaluated_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Evaluated At"
+        },
+        "current": {
+          "$ref": "#/$defs/AcceptedWorldRevision"
+        },
+        "proposed": {
+          "$ref": "#/$defs/AcceptedWorldRevision"
+        },
+        "changes": {
+          "items": {
+            "$ref": "#/$defs/Change"
+          },
+          "title": "Changes",
+          "type": "array"
+        },
+        "drift": {
+          "items": {
+            "$ref": "#/$defs/Change"
+          },
+          "title": "Drift",
+          "type": "array"
+        },
+        "issues": {
+          "items": {
+            "$ref": "#/$defs/AdmissionIssue"
+          },
+          "title": "Issues",
+          "type": "array"
+        },
+        "approval_gates": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Approval Gates",
+          "type": "array"
+        },
+        "approvals": {
+          "items": {
+            "$ref": "#/$defs/ApprovalEvidence"
+          },
+          "title": "Approvals",
+          "type": "array"
+        },
+        "explanation": {
+          "title": "Explanation",
+          "type": "string"
+        },
+        "decision_id": {
+          "default": "",
+          "title": "Decision Id",
+          "type": "string"
+        },
+        "decision_digest": {
+          "default": "",
+          "title": "Decision Digest",
+          "type": "string"
+        },
+        "canonicalization_profile": {
+          "default": "netsovereign.canonical-json/v1",
+          "title": "Canonicalization Profile",
+          "type": "string"
+        }
+      },
+      "required": [
+        "admitted",
+        "status",
+        "current",
+        "proposed",
+        "changes",
+        "drift",
+        "issues",
+        "approval_gates",
+        "explanation"
+      ],
+      "title": "AdmissionDecision",
+      "type": "object"
+    },
     "AdmissionIssue": {
       "additionalProperties": false,
       "properties": {
@@ -346,6 +449,25 @@
       "title": "GovernedAction",
       "type": "string"
     },
+    "LegacyAdmissionRecord": {
+      "additionalProperties": false,
+      "description": "Explicit read adapter for v0.4 prototype records; never admission proof.",
+      "properties": {
+        "status": {
+          "enum": [
+            "accepted",
+            "rejected"
+          ],
+          "title": "Status",
+          "type": "string"
+        }
+      },
+      "required": [
+        "status"
+      ],
+      "title": "LegacyAdmissionRecord",
+      "type": "object"
+    },
     "ResourceClass": {
       "enum": [
         "world",
@@ -379,22 +501,17 @@
   },
   "additionalProperties": false,
   "properties": {
-    "api_version": {
-      "default": "netsovereign.io/admission/v0.2",
-      "title": "Api Version",
+    "world_id": {
+      "title": "World Id",
       "type": "string"
     },
-    "admitted": {
-      "title": "Admitted",
-      "type": "boolean"
+    "revision_id": {
+      "title": "Revision Id",
+      "type": "string"
     },
-    "status": {
-      "$ref": "#/$defs/AdmissionStatus"
-    },
-    "evaluated_at": {
+    "parent_revision_id": {
       "anyOf": [
         {
-          "format": "date-time",
           "type": "string"
         },
         {
@@ -402,62 +519,134 @@
         }
       ],
       "default": null,
-      "title": "Evaluated At"
+      "title": "Parent Revision Id"
     },
-    "current": {
-      "$ref": "#/$defs/AcceptedWorldRevision"
-    },
-    "proposed": {
-      "$ref": "#/$defs/AcceptedWorldRevision"
-    },
-    "changes": {
-      "items": {
-        "$ref": "#/$defs/Change"
-      },
-      "title": "Changes",
-      "type": "array"
-    },
-    "drift": {
-      "items": {
-        "$ref": "#/$defs/Change"
-      },
-      "title": "Drift",
-      "type": "array"
-    },
-    "issues": {
-      "items": {
-        "$ref": "#/$defs/AdmissionIssue"
-      },
-      "title": "Issues",
-      "type": "array"
-    },
-    "approval_gates": {
-      "items": {
-        "type": "string"
-      },
-      "title": "Approval Gates",
-      "type": "array"
-    },
-    "approvals": {
-      "items": {
-        "$ref": "#/$defs/ApprovalEvidence"
-      },
-      "title": "Approvals",
-      "type": "array"
-    },
-    "explanation": {
-      "title": "Explanation",
+    "schema_version": {
+      "title": "Schema Version",
       "type": "string"
     },
-    "decision_id": {
-      "default": "",
-      "title": "Decision Id",
+    "declaration_digest": {
+      "title": "Declaration Digest",
       "type": "string"
     },
-    "decision_digest": {
-      "default": "",
-      "title": "Decision Digest",
+    "declaration": {
+      "additionalProperties": true,
+      "title": "Declaration",
+      "type": "object"
+    },
+    "accepted_at": {
+      "format": "date-time",
+      "title": "Accepted At",
       "type": "string"
+    },
+    "admission": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/AdmissionDecision"
+        },
+        {
+          "$ref": "#/$defs/LegacyAdmissionRecord"
+        }
+      ],
+      "title": "Admission"
+    },
+    "actor": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Actor"
+    },
+    "authority_manifest_digest": {
+      "title": "Authority Manifest Digest",
+      "type": "string"
+    },
+    "boundary_policy_digest": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Boundary Policy Digest"
+    },
+    "compatibility": {
+      "additionalProperties": true,
+      "title": "Compatibility",
+      "type": "object"
+    },
+    "status": {
+      "default": "accepted",
+      "title": "Status",
+      "type": "string"
+    },
+    "declared_revision": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Declared Revision"
+    },
+    "canonical_intent_digest": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Canonical Intent Digest"
+    },
+    "materialization_digest": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Materialization Digest"
+    },
+    "manifest_digest": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Manifest Digest"
+    },
+    "admission_decision_digest": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Admission Decision Digest"
     },
     "canonicalization_profile": {
       "default": "netsovereign.canonical-json/v1",
@@ -466,16 +655,15 @@
     }
   },
   "required": [
-    "admitted",
-    "status",
-    "current",
-    "proposed",
-    "changes",
-    "drift",
-    "issues",
-    "approval_gates",
-    "explanation"
+    "world_id",
+    "revision_id",
+    "schema_version",
+    "declaration_digest",
+    "declaration",
+    "accepted_at",
+    "admission",
+    "authority_manifest_digest"
   ],
-  "title": "AdmissionDecision",
+  "title": "DesiredRevision",
   "type": "object"
 }

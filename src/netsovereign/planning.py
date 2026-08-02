@@ -10,7 +10,7 @@ from pydantic import Field, model_validator
 
 from .authority import MandateConstraints, ResourceClass
 from .base import DomainModel
-from .canonical import canonical_json, digest
+from .canonical import CANONICALIZATION_PROFILE, canonical_json, digest
 from .canonical import normalise as _normalise
 from .manifest import build_manifest
 from .specification import WorldSpec
@@ -44,11 +44,15 @@ class Risk(StrEnum):
 class GovernedAction(StrEnum):
     DECLARE = "declare"
     ADMIT = "admit"
+    SUBMIT = "submit"
     ALLOCATE = "allocate"
     DELEGATE = "delegate"
     REVOKE = "revoke"
     ROUTE = "route"
     EXPOSE = "expose"
+    CERTIFY = "certify"
+    MIRROR = "mirror"
+    FEDERATE = "federate"
 
 
 class GovernanceRequirement(DomainModel):
@@ -65,8 +69,22 @@ class AdmissionStatus(StrEnum):
 
 class ApprovalEvidence(DomainModel):
     approval_id: str
+    subject_digest: str
+    gate_id: str
+    approver: str
     approved_at: datetime
     provenance: str
+    expires_at: datetime | None = None
+    verification_status: Literal["asserted", "verified", "revoked", "superseded"] = "asserted"
+    verification_material: dict[str, Any] | None = None
+
+    def valid_for(self, subject_digest: str, gate_id: str, at: datetime) -> bool:
+        return (
+            self.verification_status == "verified"
+            and self.subject_digest == subject_digest
+            and self.gate_id == gate_id
+            and (self.expires_at is None or self.expires_at > at)
+        )
 
 
 class ObservedFact(DomainModel):
@@ -99,6 +117,7 @@ class ObservedStateSnapshot(DomainModel):
 
 
 class AcceptedWorldRevision(DomainModel):
+    revision_record_id: str = ""
     world_id: str
     revision: str
     parent_revision: str | None = None
@@ -107,6 +126,7 @@ class AcceptedWorldRevision(DomainModel):
     materialization_digest: str
     world_digest: str
     manifest_digest: str | None
+    canonicalization_profile: str = CANONICALIZATION_PROFILE
 
 
 class ParentRevisionReference(DomainModel):
@@ -150,6 +170,16 @@ class AdmissionDecision(DomainModel):
     approval_gates: list[str]
     approvals: list[ApprovalEvidence] = Field(default_factory=list)
     explanation: str
+    decision_id: str = ""
+    decision_digest: str = ""
+    canonicalization_profile: str = CANONICALIZATION_PROFILE
+
+    def integrity_payload(self) -> dict[str, Any]:
+        return self.model_dump(mode="json", exclude={"decision_id", "decision_digest"})
+
+    def verify_integrity(self) -> bool:
+        value = digest(self.integrity_payload())
+        return self.decision_digest == value and self.decision_id == "decision-" + value[7:]
 
 
 class PredicateKind(StrEnum):
@@ -158,6 +188,9 @@ class PredicateKind(StrEnum):
     OBSERVATION_EQUALS = "observation_equals"
     MANDATE_ACTIVE = "mandate_active"
     APPROVAL_PRESENT = "approval_present"
+    ACTIVE_DESIRED_REVISION_EQUALS = "active_desired_revision_equals"
+    OBSERVATION_FRESH = "observation_fresh"
+    PROVIDER_BINDING_EQUALS = "provider_binding_equals"
 
 
 class PlanPredicate(DomainModel):
@@ -168,6 +201,8 @@ class PlanPredicate(DomainModel):
     approval_id: str | None = None
     path: str | None = None
     value_digest: str | None = None
+    binding_id: str | None = None
+    maximum_age_seconds: int | None = Field(default=None, ge=0)
 
 
 class ExpectedOutcome(DomainModel):
@@ -182,6 +217,14 @@ class Reversibility(StrEnum):
     CONDITIONALLY_REVERSIBLE = "conditionally_reversible"
     IRREVERSIBLE = "irreversible"
     UNKNOWN = "unknown"
+    CLEANUP_ONLY = "cleanup_only"
+    COMPENSATABLE_NOT_ROLLBACK = "compensatable_not_rollback_equivalent"
+
+
+class StepCapabilityRequirement(DomainModel):
+    id: str
+    version: str = "1.0"
+    binding_id: str | None = None
 
 
 class PlanStep(DomainModel):
@@ -197,6 +240,10 @@ class PlanStep(DomainModel):
     reversibility_reason: str
     authority_id: str | None = None
     mandate_id: str | None = None
+    capability: StepCapabilityRequirement = Field(
+        default_factory=lambda: StepCapabilityRequirement(id="declaration.storage")
+    )
+    prior_value: Any = None
 
 
 class ReconciliationPlan(DomainModel):
@@ -211,6 +258,21 @@ class ReconciliationPlan(DomainModel):
     approval_gates: list[str]
     execution: str = "not_permitted"
     explanation: str = "Provider-neutral plan only; no infrastructure was touched."
+    source_admission_digest: str = ""
+    current_revision_digest: str = ""
+    proposed_revision_digest: str = ""
+    proposed_manifest_digest: str | None = None
+    approval_set_digest: str = ""
+    canonicalization_profile: str = CANONICALIZATION_PROFILE
+
+    def integrity_payload(self) -> dict[str, Any]:
+        return self.model_dump(mode="json", exclude={"plan_digest"})
+
+    def verify_integrity(self) -> bool:
+        return (
+            self.canonicalization_profile == CANONICALIZATION_PROFILE
+            and self.plan_digest == digest(self.integrity_payload())
+        )
 
 
 def accepted_revision(spec: WorldSpec, parent_revision: str | None = None) -> AcceptedWorldRevision:
@@ -223,7 +285,11 @@ def accepted_revision(spec: WorldSpec, parent_revision: str | None = None) -> Ac
         "providerBindings": declaration["providerBindings"],
     }
     declaration_digest = digest(declaration)
+    record_digest = digest(
+        {"world": spec.world.id, "revision": spec.world.revision, "declaration": declaration_digest}
+    )
     return AcceptedWorldRevision(
+        revision_record_id="revision-" + record_digest[7:],
         world_id=spec.world.id,
         revision=spec.world.revision,
         parent_revision=parent_revision,
@@ -406,7 +472,9 @@ def _mandate_for(
         if not _constraints_allow(mandate.constraints, operation, path, subject):
             continue
         candidates.append(mandate.id)
-    return sorted(candidates)[0] if candidates else None
+    # Equally applicable mandates are an authority ambiguity, not a tie that an
+    # implementation may resolve by identifier ordering.
+    return candidates[0] if len(candidates) == 1 else None
 
 
 def compare_worlds(
@@ -787,7 +855,16 @@ def admit_change(
         }
     )
     supplied_approvals = sorted(approvals or [], key=lambda item: item.approval_id)
-    approved_ids = {item.approval_id for item in supplied_approvals}
+    approval_subject = accepted_revision(proposed, current.world.revision).declaration_digest
+    approval_time = evaluated_at or max(
+        (item.approved_at for item in supplied_approvals), default=datetime.min.replace(tzinfo=None)
+    )
+    approved_ids = {
+        item.approval_id
+        for item in supplied_approvals
+        if approval_time.tzinfo is not None
+        and item.valid_for(approval_subject, item.approval_id, approval_time)
+    }
     outstanding_gates = [gate for gate in gates if gate not in approved_ids]
     drift = _observed_drift(proposed, observed)
     status = (
@@ -798,7 +875,7 @@ def admit_change(
         else AdmissionStatus.ADMITTED
     )
     admitted = status == AdmissionStatus.ADMITTED
-    return AdmissionDecision(
+    decision = AdmissionDecision(
         admitted=admitted,
         status=status,
         evaluated_at=evaluated_at,
@@ -817,6 +894,48 @@ def admit_change(
             else "Proposal is rejected; resolve every admission issue before planning convergence."
         ),
     )
+    decision.decision_digest = digest(decision.integrity_payload())
+    decision.decision_id = "decision-" + decision.decision_digest[7:]
+    return decision
+
+
+def verify_admission_integrity(decision: AdmissionDecision) -> None:
+    """Fail closed when a loaded admission decision differs from its envelope."""
+
+    if not decision.verify_integrity():
+        raise ValueError("admission decision integrity check failed")
+
+
+def _capability_for(change: Change) -> StepCapabilityRequirement:
+    path = change.path
+    governance = change.governance
+    action = governance.action if governance else None
+    classes = set(governance.resource_classes if governance else [])
+    if path.startswith("provider_bindings/"):
+        return StepCapabilityRequirement(id="declaration.storage")
+    if action == GovernedAction.SUBMIT:
+        return StepCapabilityRequirement(id="registration.submit")
+    if action == GovernedAction.ADMIT and ResourceClass.REGISTRATION in classes:
+        return StepCapabilityRequirement(id="registry.admit")
+    if ResourceClass.CERTIFICATE in classes or action == GovernedAction.CERTIFY:
+        return StepCapabilityRequirement(id="trust.manage")
+    if ResourceClass.NUMBER in classes:
+        return StepCapabilityRequirement(id="number.allocate")
+    if ResourceClass.NAME in classes or ResourceClass.DOMAIN in classes:
+        return StepCapabilityRequirement(id="naming.authoritative.manage")
+    if ResourceClass.ROUTE in classes or action == GovernedAction.ROUTE:
+        return StepCapabilityRequirement(id="route.manage")
+    if action == GovernedAction.EXPOSE:
+        return StepCapabilityRequirement(id="boundary.expose")
+    if ResourceClass.PLATFORM_IDENTITY in classes:
+        return StepCapabilityRequirement(id="identity.platform.manage")
+    if ResourceClass.INWORLD_IDENTITY in classes:
+        return StepCapabilityRequirement(id="identity.inworld.manage")
+    if ResourceClass.MAIL_DOMAIN in classes:
+        return StepCapabilityRequirement(id="mail-domain.manage")
+    if ResourceClass.SERVICE in classes:
+        return StepCapabilityRequirement(id="service-catalogue.manage")
+    return StepCapabilityRequirement(id="declaration.storage")
 
 
 def _dependency_targets(change: Change) -> set[str]:
@@ -856,6 +975,7 @@ def _dependency_targets(change: Change) -> set[str]:
 
 
 def build_plan(decision: AdmissionDecision) -> ReconciliationPlan:
+    verify_admission_integrity(decision)
     steps: list[PlanStep] = []
     if decision.status != AdmissionStatus.REJECTED:
         convergence = [
@@ -900,6 +1020,7 @@ def build_plan(decision: AdmissionDecision) -> ReconciliationPlan:
                     PlanPredicate(
                         kind=PredicateKind.APPROVAL_PRESENT,
                         approval_id=f"approve:{str(change.risk)}:{change.id}",
+                        digest=decision.decision_digest,
                     )
                 )
             reversibility = (
@@ -947,26 +1068,29 @@ def build_plan(decision: AdmissionDecision) -> ReconciliationPlan:
                     ),
                     authority_id=change.authority_id,
                     mandate_id=change.mandate_id,
+                    capability=_capability_for(change),
+                    prior_value=change.before,
                 )
             )
-    payload = {
-        "world": decision.proposed.world_id,
-        "from": decision.current.revision,
-        "to": decision.proposed.revision,
-        "current_world_digest": decision.current.world_digest,
-        "proposed_world_digest": decision.proposed.world_digest,
-        "proposed_manifest_digest": decision.proposed.manifest_digest,
-        "changes": [change.model_dump(mode="json") for change in decision.changes],
-        "drift": [change.model_dump(mode="json") for change in decision.drift],
-        "steps": [s.model_dump(mode="json") for s in steps],
-    }
-    return ReconciliationPlan(
+    plan = ReconciliationPlan(
         world_id=decision.proposed.world_id,
         from_revision=decision.current.revision,
         to_revision=decision.proposed.revision,
         admitted=decision.admitted,
-        plan_digest=digest(payload),
+        plan_digest="pending",
         steps=steps,
         drift=decision.drift,
         approval_gates=decision.approval_gates,
+        source_admission_digest=decision.decision_digest,
+        current_revision_digest=decision.current.declaration_digest,
+        proposed_revision_digest=decision.proposed.declaration_digest,
+        proposed_manifest_digest=decision.proposed.manifest_digest,
+        approval_set_digest=digest([item.model_dump(mode="json") for item in decision.approvals]),
     )
+    plan.plan_digest = digest(plan.integrity_payload())
+    return plan
+
+
+def verify_plan_integrity(plan: ReconciliationPlan) -> None:
+    if not plan.verify_integrity():
+        raise ValueError("reconciliation plan integrity check failed")

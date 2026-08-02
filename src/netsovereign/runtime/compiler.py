@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from ..canonical import digest
-from ..planning import ReconciliationPlan
+from ..planning import ReconciliationPlan, Reversibility, verify_plan_integrity
 from ..providers.contracts import CapabilityRequirement
 from ..providers.registry import ProviderRegistry
 from .models import ExecutableOperation, ExecutablePlan, FailurePosture, RetryPolicy
@@ -36,19 +36,30 @@ def compile_plan(
     failure_posture: FailurePosture = FailurePosture.STOP,
 ) -> ExecutablePlan:
     """Purely bind a copied v0.2 plan; providers are described but never invoked."""
+    verify_plan_integrity(plan)
     if not plan.admitted:
         raise ValueError("only admitted plans can be compiled")
     operations: list[ExecutableOperation] = []
     for order, step in enumerate(_ordered_steps(plan)):
-        requirement = CapabilityRequirement(id="resource.manage")
+        requirement = CapabilityRequirement(id=step.capability.id, version=step.capability.version)
         requested = (bindings or {}).get(step.id)
         provider = registry.resolve(requirement, requested)
         descriptor = provider.describe()
+        declaration = next(x for x in descriptor.capabilities if x.id == requirement.id)
+        policy = retry_policy or RetryPolicy()
+        if policy.maximum_attempts > 1 and not declaration.idempotent:
+            raise ValueError("non-idempotent provider operation cannot be retried")
+        if failure_posture == FailurePosture.COMPENSATE_ALL and (
+            not declaration.compensation
+            or step.reversibility
+            not in {Reversibility.REVERSIBLE, Reversibility.CONDITIONALLY_REVERSIBLE}
+        ):
+            raise ValueError("failure posture requires a compensatable operation and provider")
         expected = step.expected_outcomes[0].value if step.expected_outcomes else None
         stable = {"plan": plan.plan_digest, "step": step.id, "provider": descriptor.id}
         operations.append(
             ExecutableOperation(
-                id="operation-" + digest(stable)[:16],
+                id="operation-" + digest(stable)[7:23],
                 source_step_id=step.id,
                 authority_id=step.authority_id,
                 mandate_id=step.mandate_id,
@@ -58,15 +69,24 @@ def compile_plan(
                 provider_id=descriptor.id,
                 provider_binding_id=descriptor.binding_id,
                 depends_on=list(step.depends_on),
-                preconditions=[item.model_dump(mode="json") for item in step.preconditions],
+                preconditions=list(step.preconditions),
                 expected=expected,
                 idempotency_key=digest({**stable, "expected": expected}),
-                retry_policy=retry_policy or RetryPolicy(),
+                retry_policy=policy,
                 failure_posture=failure_posture,
                 dry_run_compatible=next(
                     x for x in descriptor.capabilities if x.id == requirement.id
                 ).dry_run,
                 order=order,
+                reversibility=step.reversibility,
+                prior_value=step.prior_value,
+                expected_outcome_digest=(
+                    step.expected_outcomes[0].value_digest
+                    if step.expected_outcomes
+                    else digest(None)
+                ),
+                provider_idempotent=declaration.idempotent,
+                provider_compensation=declaration.compensation,
             )
         )
     core = {
@@ -77,11 +97,12 @@ def compile_plan(
     }
     fingerprint = digest(core)
     return ExecutablePlan(
-        id="execution-plan-" + fingerprint[:16],
+        id="execution-plan-" + fingerprint[7:23],
         source_plan_id=plan.plan_digest,
         world_id=plan.world_id,
         from_revision=plan.from_revision,
         desired_revision=plan.to_revision,
         fingerprint=fingerprint,
         operations=operations,
+        admission_decision_digest=plan.source_admission_digest,
     )

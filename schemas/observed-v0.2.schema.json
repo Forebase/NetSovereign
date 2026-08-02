@@ -4,34 +4,9 @@
       "additionalProperties": false,
       "description": "A non-canonical observation addressed by a stable semantic path.",
       "properties": {
-        "observed_at": {
-          "anyOf": [
-            {
-              "format": "date-time",
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Observed At"
-        },
         "path": {
           "title": "Path",
           "type": "string"
-        },
-        "provenance": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Provenance"
         },
         "status": {
           "default": "present",
@@ -47,6 +22,31 @@
         "value": {
           "default": null,
           "title": "Value"
+        },
+        "observed_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Observed At"
+        },
+        "provenance": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Provenance"
         }
       },
       "required": [
@@ -63,12 +63,9 @@
       "title": "Apiversion",
       "type": "string"
     },
-    "facts": {
-      "items": {
-        "$ref": "#/$defs/ObservedFact"
-      },
-      "title": "Facts",
-      "type": "array"
+    "world_id": {
+      "title": "World Id",
+      "type": "string"
     },
     "observed_at": {
       "format": "date-time",
@@ -79,9 +76,12 @@
       "title": "Provenance",
       "type": "string"
     },
-    "world_id": {
-      "title": "World Id",
-      "type": "string"
+    "facts": {
+      "items": {
+        "$ref": "#/$defs/ObservedFact"
+      },
+      "title": "Facts",
+      "type": "array"
     }
   },
   "required": [

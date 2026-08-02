@@ -203,7 +203,9 @@ def build_manifest(spec: WorldSpec) -> WorldManifest:
     )
     sources: dict[str, list[str]] = {}
     roles: dict[str, str] = {}
-    for item in spec.authorities:
+    # Authority declaration order is set-like.  The stable identifier ordering is
+    # the explicit v0.4.1 domain rule for the compatibility "primary" projection.
+    for item in sorted(spec.authorities, key=lambda authority: authority.id):
         sources.setdefault(str(item.source), []).append(item.id)
         roles.setdefault(str(item.kind), item.id)
     sources = {key: sorted(value) for key, value in sorted(sources.items())}
