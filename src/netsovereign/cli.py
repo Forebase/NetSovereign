@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 from datetime import datetime
 from pathlib import Path
@@ -17,10 +18,14 @@ from .planning import (
     ApprovalEvidence,
     ObservedStateSnapshot,
     ParentRevisionReference,
+    ReconciliationPlan,
     admit_change,
     build_plan,
     compare_worlds,
 )
+from .providers.fake import FakeProvider
+from .providers.registry import ProviderRegistry
+from .runtime import InMemoryExecutionRepository, RuntimeExecutor, compile_plan
 from .specification import WorldSpec
 from .validation import has_errors, validate_spec
 
@@ -195,6 +200,30 @@ def plan(
         raise typer.Exit(1)
     if decision.status == "pending_approval":
         raise typer.Exit(3)
+
+
+@app.command("execute")
+def execute_command(
+    plan_file: Path,
+    dry_run: Annotated[bool, typer.Option("--dry-run")] = False,
+) -> None:
+    """Compile and execute an admitted plan through the in-memory fake provider."""
+    try:
+        intent_plan = ReconciliationPlan.model_validate(
+            yaml.safe_load(plan_file.read_text(encoding="utf-8"))
+        )
+        registry = ProviderRegistry()
+        registry.register(FakeProvider())
+        executable = compile_plan(intent_plan, registry)
+        report = asyncio.run(
+            RuntimeExecutor(registry, InMemoryExecutionRepository()).execute(
+                executable, dry_run=dry_run
+            )
+        )
+    except (OSError, ValidationError, ValueError) as exc:
+        typer.echo(f"EXECUTION_ERROR {plan_file}: {exc}", err=True)
+        raise typer.Exit(1) from exc
+    _emit(report)
 
 
 if __name__ == "__main__":
