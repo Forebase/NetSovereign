@@ -1,4 +1,4 @@
-"""Versioned canonical JSON and digest primitives for v0.2 artifacts."""
+"""The single versioned canonical JSON contract used by every engine layer."""
 
 from __future__ import annotations
 
@@ -7,6 +7,9 @@ import json
 from typing import Any
 
 from .base import DomainModel
+
+CANONICALIZATION_PROFILE = "netsovereign.canonical-json/v1"
+DIGEST_ALGORITHM = "sha256"
 
 SET_LIKE_COLLECTIONS = {
     "institutions",
@@ -80,4 +83,4 @@ def canonical_json(value: Any) -> str:
 
 
 def digest(value: Any) -> str:
-    return "sha256:" + hashlib.sha256(canonical_json(value).encode()).hexdigest()
+    return DIGEST_ALGORITHM + ":" + hashlib.sha256(canonical_json(value).encode()).hexdigest()

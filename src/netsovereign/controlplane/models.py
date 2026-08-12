@@ -7,11 +7,15 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 from enum import StrEnum
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import Field, field_validator, model_validator
 
 from ..base import DomainModel
+from ..canonical import CANONICALIZATION_PROFILE, digest
+from ..manifest import build_manifest
+from ..planning import AdmissionDecision, AdmissionStatus, verify_admission_integrity
+from ..specification import WorldSpec
 
 CONTROL_PLANE_SCHEMA_VERSION = 4
 _SECRET_TERMS = ("password", "secret", "token", "private_key", "credential")
@@ -40,6 +44,12 @@ def _require_aware(value: datetime | None) -> datetime | None:
     return value
 
 
+class LegacyAdmissionRecord(DomainModel):
+    """Explicit read adapter for v0.4 prototype records; never admission proof."""
+
+    status: Literal["accepted", "rejected"]
+
+
 class DesiredRevision(DomainModel):
     world_id: str
     revision_id: str
@@ -48,14 +58,67 @@ class DesiredRevision(DomainModel):
     declaration_digest: str
     declaration: dict[str, Any]
     accepted_at: datetime
-    admission: dict[str, Any]
+    admission: AdmissionDecision | LegacyAdmissionRecord
     actor: str | None = None
     authority_manifest_digest: str
     boundary_policy_digest: str | None = None
     compatibility: dict[str, Any] = Field(default_factory=dict)
     status: str = "accepted"
+    declared_revision: str | None = None
+    canonical_intent_digest: str | None = None
+    materialization_digest: str | None = None
+    manifest_digest: str | None = None
+    admission_decision_digest: str | None = None
+    canonicalization_profile: str = CANONICALIZATION_PROFILE
 
     _accepted_at_is_aware = field_validator("accepted_at")(_require_aware)
+
+
+def desired_revision_from_admission(
+    decision: AdmissionDecision,
+    proposal: WorldSpec,
+    *,
+    accepted_at: datetime,
+    actor: str | None = None,
+) -> DesiredRevision:
+    """The only integrity-preserving v0.2 -> control-plane activation adapter."""
+
+    verify_admission_integrity(decision)
+    if decision.status != AdmissionStatus.ADMITTED or not decision.admitted:
+        raise ValueError("only an admitted decision can create desired state")
+    if decision.approval_gates:
+        raise ValueError("outstanding approval gates cannot create desired state")
+    declaration = proposal.model_dump(mode="json", by_alias=True)
+    if (
+        proposal.world.id != decision.proposed.world_id
+        or proposal.world.revision != decision.proposed.revision
+    ):
+        raise ValueError("proposal identity does not match admission")
+    if digest(declaration) != decision.proposed.declaration_digest:
+        raise ValueError("proposal declaration digest does not match admission")
+    manifest_digest = digest(build_manifest(proposal))
+    if manifest_digest != decision.proposed.manifest_digest:
+        raise ValueError("proposal manifest digest does not match admission")
+    if decision.proposed.parent_revision != decision.current.revision:
+        raise ValueError("proposal parent is not the accepted revision")
+    return DesiredRevision(
+        world_id=proposal.world.id,
+        revision_id=decision.proposed.revision_record_id,
+        parent_revision_id=decision.current.revision_record_id,
+        declared_revision=proposal.world.revision,
+        schema_version=proposal.api_version,
+        declaration_digest=decision.proposed.declaration_digest,
+        canonical_intent_digest=decision.proposed.canonical_intent_digest,
+        materialization_digest=decision.proposed.materialization_digest,
+        manifest_digest=manifest_digest,
+        declaration=declaration,
+        accepted_at=accepted_at,
+        admission=decision,
+        admission_decision_digest=decision.decision_digest,
+        actor=actor,
+        authority_manifest_digest=manifest_digest,
+        status="admitted",
+    )
 
 
 class AuthoritativeRecord(DomainModel):

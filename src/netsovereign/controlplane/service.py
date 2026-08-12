@@ -2,15 +2,15 @@
 
 from __future__ import annotations
 
-import hashlib
-import json
 from datetime import datetime, timedelta
 from typing import Any
 
+from ..canonical import digest
 from .models import (
     DesiredRevision,
     DriftClassification,
     DriftRecord,
+    LegacyAdmissionRecord,
     LockLease,
     ObservedRecord,
 )
@@ -18,8 +18,7 @@ from .repository import ControlPlaneRepository
 
 
 def _digest(value: Any) -> str:
-    canonical = json.dumps(value, sort_keys=True, separators=(",", ":"), default=str)
-    return hashlib.sha256(canonical.encode()).hexdigest()
+    return digest(value)
 
 
 class DriftDetector:
@@ -135,7 +134,15 @@ class ControlPlaneService:
         self.drift = DriftDetector()
 
     def accept_revision(self, revision: DesiredRevision) -> DesiredRevision:
-        if revision.status != "accepted" or revision.admission.get("status") == "rejected":
+        if isinstance(revision.admission, dict):
+            revision = revision.model_copy(
+                update={"admission": LegacyAdmissionRecord.model_validate(revision.admission)}
+            )
+        admission_status = revision.admission.status
+        if revision.status not in {"accepted", "admitted"} or admission_status in {
+            "rejected",
+            "pending_approval",
+        }:
             with self.repository.transaction():
                 self.repository.put_immutable("desired", revision.revision_id, revision)
             return revision

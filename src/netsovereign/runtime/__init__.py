@@ -5,7 +5,7 @@ original v0.3 import surface.
 """
 
 from .compiler import compile_plan
-from .executor import RuntimeExecutor
+from .executor import RuntimeExecutor, RuntimeFacts, offline_demo_facts
 from .models import (
     TERMINAL_STATES,
     TRANSITIONS,
@@ -41,8 +41,10 @@ __all__ = [
     "PlanStatus",
     "RetryPolicy",
     "RuntimeExecutor",
+    "RuntimeFacts",
     "TERMINAL_STATES",
     "TRANSITIONS",
     "Transition",
     "compile_plan",
+    "offline_demo_facts",
 ]

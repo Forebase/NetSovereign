@@ -6,7 +6,7 @@ from datetime import datetime
 from enum import StrEnum
 from typing import Literal
 
-from pydantic import Field
+from pydantic import Field, model_validator
 
 from .base import DomainModel
 
@@ -99,6 +99,15 @@ class ResourceClass(StrEnum):
 class Validity(DomainModel):
     not_before: datetime | None = None
     not_after: datetime | None = None
+
+    @model_validator(mode="after")
+    def coherent_interval(self) -> Validity:
+        for value in (self.not_before, self.not_after):
+            if value is not None and (value.tzinfo is None or value.utcoffset() is None):
+                raise ValueError("mandate validity timestamps must be timezone-aware")
+        if self.not_before and self.not_after and self.not_before > self.not_after:
+            raise ValueError("mandate not_before cannot follow not_after")
+        return self
 
 
 class MandateConstraints(DomainModel):

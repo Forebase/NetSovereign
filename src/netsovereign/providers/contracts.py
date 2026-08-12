@@ -51,6 +51,18 @@ class ProviderContext(DomainModel):
     operation_id: str
     idempotency_key: str
     dry_run: bool = False
+    world_id: str = ""
+    source_plan_digest: str = ""
+    admission_decision_digest: str = ""
+    desired_revision: str = ""
+    authority_id: str | None = None
+    mandate_id: str | None = None
+    capability_id: str = ""
+    capability_version: str = ""
+    provider_id: str = ""
+    binding_id: str = ""
+    expected_outcome_digest: str = ""
+    fencing_token: int | None = None
 
 
 class ValidationResult(DomainModel):

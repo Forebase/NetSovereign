@@ -9,6 +9,7 @@ from typing import Any
 from pydantic import Field
 
 from ..base import DomainModel
+from ..planning import PlanPredicate, Reversibility
 from ..providers.contracts import (
     CapabilityRequirement,
     FailureClass,
@@ -105,13 +106,18 @@ class ExecutableOperation(DomainModel):
     provider_id: str
     provider_binding_id: str
     depends_on: list[str]
-    preconditions: list[dict[str, Any]]
+    preconditions: list[PlanPredicate]
     expected: Any
     idempotency_key: str
     retry_policy: RetryPolicy
     failure_posture: FailurePosture
     dry_run_compatible: bool
     order: int
+    reversibility: Reversibility = Reversibility.UNKNOWN
+    prior_value: Any = None
+    expected_outcome_digest: str = ""
+    provider_idempotent: bool = True
+    provider_compensation: bool = True
 
 
 class ExecutablePlan(DomainModel):
@@ -122,6 +128,7 @@ class ExecutablePlan(DomainModel):
     desired_revision: str
     fingerprint: str
     operations: list[ExecutableOperation]
+    admission_decision_digest: str = ""
 
 
 class Transition(DomainModel):

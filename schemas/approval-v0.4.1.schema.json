@@ -1,0 +1,77 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "approval_id": {
+      "title": "Approval Id",
+      "type": "string"
+    },
+    "subject_digest": {
+      "title": "Subject Digest",
+      "type": "string"
+    },
+    "gate_id": {
+      "title": "Gate Id",
+      "type": "string"
+    },
+    "approver": {
+      "title": "Approver",
+      "type": "string"
+    },
+    "approved_at": {
+      "format": "date-time",
+      "title": "Approved At",
+      "type": "string"
+    },
+    "provenance": {
+      "title": "Provenance",
+      "type": "string"
+    },
+    "expires_at": {
+      "anyOf": [
+        {
+          "format": "date-time",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Expires At"
+    },
+    "verification_status": {
+      "default": "asserted",
+      "enum": [
+        "asserted",
+        "verified",
+        "revoked",
+        "superseded"
+      ],
+      "title": "Verification Status",
+      "type": "string"
+    },
+    "verification_material": {
+      "anyOf": [
+        {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Verification Material"
+    }
+  },
+  "required": [
+    "approval_id",
+    "subject_digest",
+    "gate_id",
+    "approver",
+    "approved_at",
+    "provenance"
+  ],
+  "title": "ApprovalEvidence",
+  "type": "object"
+}

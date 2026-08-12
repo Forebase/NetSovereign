@@ -251,12 +251,59 @@ def test_approval_is_a_distinct_admission_state():
     pending = admit_change(current, proposed)
     assert pending.status == "pending_approval" and not pending.admitted
     evidence = ApprovalEvidence(
-        approval_id=pending.approval_gates[0],
+        approval_id="approval-evidence-001",
+        gate_id=pending.approval_gates[0],
+        subject_digest=pending.proposed.declaration_digest,
+        approver="authority:root",
         approved_at=datetime(2026, 1, 1, tzinfo=UTC),
         provenance="offline-review",
+        verification_status="verified",
     )
-    admitted = admit_change(current, proposed, approvals=[evidence])
+    admitted = admit_change(
+        current,
+        proposed,
+        approvals=[evidence],
+        evaluated_at=datetime(2026, 1, 1, 1, tzinfo=UTC),
+    )
     assert admitted.status == "admitted" and admitted.approval_gates == []
+
+
+def test_approval_expiry_uses_required_admission_evaluation_time():
+    current, proposed = worlds()
+    proposed.world.name = "Approval-gated name"
+    pending = admit_change(current, proposed)
+    evidence = ApprovalEvidence(
+        approval_id="approval-evidence-expired",
+        gate_id=pending.approval_gates[0],
+        subject_digest=pending.proposed.declaration_digest,
+        approver="authority:root",
+        approved_at=datetime(2026, 1, 1, tzinfo=UTC),
+        expires_at=datetime(2026, 1, 2, tzinfo=UTC),
+        provenance="offline-review",
+        verification_status="verified",
+    )
+    missing_time = admit_change(current, proposed, approvals=[evidence])
+    assert missing_time.status == "rejected"
+    assert any(issue.code == "approval_evaluation_time_required" for issue in missing_time.issues)
+    expired = admit_change(
+        current,
+        proposed,
+        approvals=[evidence],
+        evaluated_at=datetime(2026, 2, 1, tzinfo=UTC),
+    )
+    assert expired.status == "pending_approval"
+    assert expired.approval_gates == pending.approval_gates
+
+
+def test_equally_applicable_mandates_fail_closed_instead_of_identifier_tiebreak():
+    current, proposed = worlds()
+    proposed.world.name = "Governed rename"
+    duplicate = current.mandates[0].model_copy(update={"id": "duplicate-mandate"}, deep=True)
+    current.mandates.append(duplicate)
+    proposed.mandates.append(duplicate.model_copy(deep=True))
+    decision = admit_change(current, proposed)
+    assert decision.status == "rejected"
+    assert any(issue.code == "missing_applicable_mandate" for issue in decision.issues)
 
 
 def test_invalid_current_world_cannot_authorise_change():
