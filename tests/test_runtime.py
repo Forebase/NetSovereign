@@ -103,6 +103,18 @@ def test_compilation_is_stable_preserves_provenance_and_does_not_mutate():
         compile_plan(broken, setup())
 
 
+def test_executable_fingerprint_binds_admission_decision_provenance():
+    _, _, plan = admitted_plan()
+    executable = compile_plan(plan, setup())
+    forged = executable.model_copy(update={"admission_decision_digest": "sha256:forged"})
+    with pytest.raises(ValueError, match="execution plan integrity"):
+        run(
+            RuntimeExecutor(setup(), InMemoryExecutionRepository()).execute(
+                forged, facts=offline_demo_facts(forged, datetime.now(UTC))
+            )
+        )
+
+
 def test_state_machine_fails_closed_and_records_time():
     now = datetime.now(UTC)
     record = OperationExecution(operation_id="one")
@@ -238,6 +250,7 @@ def test_dry_run_failure_never_compensates_simulated_operations():
     executable.fingerprint = digest(
         {
             "source": executable.source_plan_id,
+            "admission": executable.admission_decision_digest,
             "from": executable.from_revision,
             "to": executable.desired_revision,
             "operations": [item.model_dump(mode="json") for item in executable.operations],

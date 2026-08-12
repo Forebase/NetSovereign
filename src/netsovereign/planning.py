@@ -78,6 +78,16 @@ class ApprovalEvidence(DomainModel):
     verification_status: Literal["asserted", "verified", "revoked", "superseded"] = "asserted"
     verification_material: dict[str, Any] | None = None
 
+    @model_validator(mode="after")
+    def timestamps_are_coherent(self) -> ApprovalEvidence:
+        if self.approved_at.tzinfo is None or (
+            self.expires_at is not None and self.expires_at.tzinfo is None
+        ):
+            raise ValueError("approval timestamps must be timezone-aware")
+        if self.expires_at is not None and self.expires_at <= self.approved_at:
+            raise ValueError("approval expiry must follow approval time")
+        return self
+
     def valid_for(self, subject_digest: str, gate_id: str, at: datetime) -> bool:
         return (
             self.verification_status == "verified"
@@ -173,6 +183,12 @@ class AdmissionDecision(DomainModel):
     decision_id: str = ""
     decision_digest: str = ""
     canonicalization_profile: str = CANONICALIZATION_PROFILE
+
+    @model_validator(mode="after")
+    def evaluation_time_is_aware(self) -> AdmissionDecision:
+        if self.evaluated_at is not None and self.evaluated_at.tzinfo is None:
+            raise ValueError("admission evaluated_at must be timezone-aware")
+        return self
 
     def integrity_payload(self) -> dict[str, Any]:
         return self.model_dump(mode="json", exclude={"decision_id", "decision_digest"})
@@ -856,16 +872,20 @@ def admit_change(
     )
     supplied_approvals = sorted(approvals or [], key=lambda item: item.approval_id)
     approval_subject = accepted_revision(proposed, current.world.revision).declaration_digest
-    approval_time = evaluated_at or max(
-        (item.approved_at for item in supplied_approvals), default=datetime.min.replace(tzinfo=None)
-    )
-    approved_ids = {
-        item.approval_id
+    if supplied_approvals and evaluated_at is None:
+        issues.append(
+            AdmissionIssue(
+                code="approval_evaluation_time_required",
+                path="approvals",
+                message="A timezone-aware evaluated_at is required when approval evidence is supplied.",
+            )
+        )
+    approved_gates = {
+        item.gate_id
         for item in supplied_approvals
-        if approval_time.tzinfo is not None
-        and item.valid_for(approval_subject, item.approval_id, approval_time)
+        if evaluated_at is not None and item.valid_for(approval_subject, item.gate_id, evaluated_at)
     }
-    outstanding_gates = [gate for gate in gates if gate not in approved_ids]
+    outstanding_gates = [gate for gate in gates if gate not in approved_gates]
     drift = _observed_drift(proposed, observed)
     status = (
         AdmissionStatus.REJECTED

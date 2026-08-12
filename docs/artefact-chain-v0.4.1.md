@@ -32,6 +32,10 @@ unexpired, and bound to the exact proposal digest and gate satisfies admission. 
 not provide signatures, operational providers, PostgreSQL runtime integration, restart recovery,
 high availability or daemon reconciliation.
 
+Approval evidence IDs identify evidence records and are distinct from gate IDs. Admission clears
+the referenced gate ID, and requires an explicit timezone-aware `evaluated_at` whenever approvals
+are supplied so expiry is never evaluated against an approval's own historical timestamp.
+
 The v0.2 admission and plan schemas gain integrity-envelope fields. New v0.4.1 approval,
 executable-plan and desired-revision schemas are published. The typed desired-revision adapter is
 the supported activation path; legacy prototype records remain readable but are not admission

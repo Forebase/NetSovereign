@@ -196,6 +196,7 @@ class RuntimeExecutor:
             digest(
                 {
                     "source": plan.source_plan_id,
+                    "admission": plan.admission_decision_digest,
                     "from": plan.from_revision,
                     "to": plan.desired_revision,
                     "operations": [item.model_dump(mode="json") for item in plan.operations],

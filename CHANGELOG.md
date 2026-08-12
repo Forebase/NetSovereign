@@ -9,6 +9,8 @@
 - Review hardening removes inferred runtime facts, rejects ambiguous mandates, types the legacy
   admission adapter, binds runtime approvals to their decision, and removes order-derived manifest
   authority selection.
+- Review fixes distinguish approval evidence IDs from gate IDs, require a trusted approval
+  evaluation time, and bind admission provenance into executable-plan fingerprints.
 
 ## 0.3.0 - 2026-08-02
 - Added deterministic compilation of admitted plans, typed provider contracts and

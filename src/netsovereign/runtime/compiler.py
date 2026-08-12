@@ -91,6 +91,7 @@ def compile_plan(
         )
     core = {
         "source": plan.plan_digest,
+        "admission": plan.source_admission_digest,
         "from": plan.from_revision,
         "to": plan.to_revision,
         "operations": [item.model_dump(mode="json") for item in operations],
